@@ -68,7 +68,7 @@ void GenerateCrc32(MacroAssembler* masm) {
 
 #ifndef TEST_EXAMPLES
 
-void RunExample(const char* msg) {
+void runExample(const char* msg) {
   MacroAssembler masm;
 
   // Generate the code for the example function.
@@ -96,10 +96,10 @@ void RunExample(const char* msg) {
 
 
 int main(void) {
-  RunExample("Hello World!");
-  RunExample("do");
-  RunExample("1");
-  RunExample("");
+  runExample("Hello World!");
+  runExample("do");
+  runExample("1");
+  runExample("");
 
   return 0;
 }

@@ -35,9 +35,8 @@ import util
 
 # Scan matching tests and return a test manifest.
 def GetTests(runner, filters = []):
-  cmd = runner +  ' --list'
-  rc, output = util.getstatusoutput(cmd)
-  if rc != 0: util.abort("Failed to list all tests. Output of " + cmd + ":\n" + output)
+  rc, output = util.getstatusoutput(runner +  ' --list')
+  if rc != 0: util.abort('Failed to list all tests')
 
   tests = output.split()
   for f in filters:
