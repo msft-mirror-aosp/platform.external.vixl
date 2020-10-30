@@ -262,20 +262,20 @@ TEST(CPUFeatures_iterator_api) {
 
   // Incrementable
   // - Incrementing has no effect on an empty CPUFeatures.
-  VIXL_CHECK(*it3++ == CPUFeatures::kNone);
-  VIXL_CHECK(*(++it3) == CPUFeatures::kNone);
+  VIXL_CHECK(it3++ == CPUFeatures::kNone);
+  VIXL_CHECK(++it3 == CPUFeatures::kNone);
   VIXL_CHECK(it3 == It(&f3, CPUFeatures::kNone));
   // - Incrementing moves to the next feature, wrapping around (through kNone).
   //   This test will need to be updated if the Feature enum is reordered.
-  VIXL_CHECK(*it2_neon++ == CPUFeatures::kNEON);
-  VIXL_CHECK(*it2_neon++ == CPUFeatures::kCRC32);
-  VIXL_CHECK(*it2_neon++ == CPUFeatures::kNone);
-  VIXL_CHECK(*it2_neon++ == CPUFeatures::kFP);
+  VIXL_CHECK(it2_neon++ == CPUFeatures::kNEON);
+  VIXL_CHECK(it2_neon++ == CPUFeatures::kCRC32);
+  VIXL_CHECK(it2_neon++ == CPUFeatures::kNone);
+  VIXL_CHECK(it2_neon++ == CPUFeatures::kFP);
   VIXL_CHECK(it2_neon == It(&f2, CPUFeatures::kNEON));
-  VIXL_CHECK(*(++it2_crc32) == CPUFeatures::kNone);
-  VIXL_CHECK(*(++it2_crc32) == CPUFeatures::kFP);
-  VIXL_CHECK(*(++it2_crc32) == CPUFeatures::kNEON);
-  VIXL_CHECK(*(++it2_crc32) == CPUFeatures::kCRC32);
+  VIXL_CHECK(++it2_crc32 == CPUFeatures::kNone);
+  VIXL_CHECK(++it2_crc32 == CPUFeatures::kFP);
+  VIXL_CHECK(++it2_crc32 == CPUFeatures::kNEON);
+  VIXL_CHECK(++it2_crc32 == CPUFeatures::kCRC32);
   VIXL_CHECK(it2_crc32 == It(&f2, CPUFeatures::kCRC32));
 }
 
@@ -313,6 +313,7 @@ TEST(CPUFeatures_iterator_loops) {
   }
   VIXL_CHECK(f3_list.size() == 0);
 
+#if __cplusplus >= 201103L
   std::vector<CPUFeatures::Feature> f2_list_cxx11;
   for (auto&& feature : f2) {
     f2_list_cxx11.push_back(feature);
@@ -327,18 +328,16 @@ TEST(CPUFeatures_iterator_loops) {
     f3_list_cxx11.push_back(feature);
   }
   VIXL_CHECK(f3_list_cxx11.size() == 0);
+#endif
 }
 
 
 TEST(CPUFeatures_empty) {
   // A default-constructed CPUFeatures has no features enabled.
-  CPUFeatures features;
-  for (auto f : features) {
-    USE(f);
+  CPUFeatures f;
+  for (CPUFeatures::const_iterator it = f.begin(); it != f.end(); ++it) {
     VIXL_ABORT();
   }
-  VIXL_CHECK(features.HasNoFeatures());
-  VIXL_CHECK(features.Count() == 0);
 }
 
 
@@ -378,6 +377,24 @@ TEST(CPUFeatures_format) {
   CPUFeaturesFormatHelper("FP, NEON, CRC32, Fcma", f);
   f.Combine(CPUFeatures::kSHA1);
   CPUFeaturesFormatHelper("FP, NEON, CRC32, SHA1, Fcma", f);
+
+  CPUFeaturesFormatHelper(
+      "ID register emulation, "
+      // Armv8.0
+      "FP, NEON, CRC32, "
+      "AES, SHA1, SHA2, Pmull1Q, "
+      // Armv8.1
+      "Atomics, LORegions, RDM, "
+      // Armv8.2
+      "SVE, DotProduct, FPHalf, NEONHalf, RAS, DCPoP, DCCVADP, SHA3, SHA512, "
+      "SM3, SM4, "
+      // Armv8.3
+      "PAuth, PAuthQARMA, PAuthGeneric, PAuthGenericQARMA, JSCVT, Fcma, RCpc, "
+      // Armv8.4
+      "RCpc (imm), FlagM, USCAT, FHM, DIT, "
+      // Armv8.5
+      "BTI, AXFlag, RNG, Frint (bounded)",
+      CPUFeatures::All());
 }
 
 
@@ -385,16 +402,17 @@ static void CPUFeaturesPredefinedResultCheckHelper(
     const std::set<CPUFeatures::Feature>& unexpected,
     const std::set<CPUFeatures::Feature>& expected) {
   // Print a helpful diagnostic before checking the result.
+  typedef std::set<CPUFeatures::Feature>::const_iterator It;
   if (!unexpected.empty()) {
     std::cout << "Unexpected features:\n";
-    for (auto f : unexpected) {
-      std::cout << "  " << f << "\n";
+    for (It it = unexpected.begin(); it != unexpected.end(); ++it) {
+      std::cout << "  " << *it << "\n";
     }
   }
   if (!expected.empty()) {
     std::cout << "Missing features:\n";
-    for (auto f : expected) {
-      std::cout << "  " << f << "\n";
+    for (It it = expected.begin(); it != expected.end(); ++it) {
+      std::cout << "  " << *it << "\n";
     }
   }
   VIXL_CHECK(unexpected.empty() && expected.empty());
@@ -402,29 +420,28 @@ static void CPUFeaturesPredefinedResultCheckHelper(
 
 
 TEST(CPUFeatures_predefined_legacy) {
-  CPUFeatures features = CPUFeatures::AArch64LegacyBaseline();
+  CPUFeatures f = CPUFeatures::AArch64LegacyBaseline();
   std::set<CPUFeatures::Feature> unexpected;
   std::set<CPUFeatures::Feature> expected;
   expected.insert(CPUFeatures::kFP);
   expected.insert(CPUFeatures::kNEON);
   expected.insert(CPUFeatures::kCRC32);
 
-  for (auto f : features) {
-    if (expected.erase(f) == 0) unexpected.insert(f);
+  for (CPUFeatures::const_iterator it = f.begin(); it != f.end(); ++it) {
+    if (expected.erase(*it) == 0) unexpected.insert(*it);
   }
   CPUFeaturesPredefinedResultCheckHelper(unexpected, expected);
 }
 
 
 TEST(CPUFeatures_predefined_all) {
-  CPUFeatures features = CPUFeatures::All();
+  CPUFeatures f = CPUFeatures::All();
   std::set<CPUFeatures::Feature> found;
 
-  for (auto f : features) {
-    found.insert(f);
+  for (CPUFeatures::const_iterator it = f.begin(); it != f.end(); ++it) {
+    found.insert(*it);
   }
   VIXL_CHECK(found.size() == CPUFeatures::kNumberOfFeatures);
-  VIXL_CHECK(found.size() == features.Count());
 }
 
 // The CPUFeaturesScope constructor is templated, and needs an object which
@@ -485,10 +502,7 @@ TEST(CPUFeaturesScope) {
       CPUFeatures auth(CPUFeatures::kPAuth,
                        CPUFeatures::kPAuthQARMA,
                        CPUFeatures::kPAuthGeneric,
-                       CPUFeatures::kPAuthGenericQARMA,
-                       CPUFeatures::kPAuthEnhancedPAC2,
-                       CPUFeatures::kPAuthFPAC,
-                       CPUFeatures::kPAuthFPACCombined);
+                       CPUFeatures::kPAuthGenericQARMA);
 
       CPUFeaturesScope inner(&outer, auth);
       VIXL_CHECK(inner.GetCPUFeatures() == &cpu);
@@ -499,11 +513,6 @@ TEST(CPUFeaturesScope) {
     // Check for equivalence.
     VIXL_CHECK(cpu.Has(original_inner));
     VIXL_CHECK(original_inner.Has(cpu));
-  }
-
-  {
-    // Scopes can be initialised with no features.
-    CPUFeaturesScope scope(&top_level);
   }
 
   // Check for equivalence.

@@ -27,8 +27,6 @@
 #ifndef VIXL_AARCH64_DISASM_AARCH64_H
 #define VIXL_AARCH64_DISASM_AARCH64_H
 
-#include <utility>
-
 #include "../globals-vixl.h"
 #include "../utils-vixl.h"
 
@@ -114,13 +112,10 @@ class Disassembler : public DecoderVisitor {
  private:
   void Format(const Instruction* instr,
               const char* mnemonic,
-              const char* format0,
-              const char* format1 = NULL);
+              const char* format);
   void Substitute(const Instruction* instr, const char* string);
   int SubstituteField(const Instruction* instr, const char* format);
   int SubstituteRegisterField(const Instruction* instr, const char* format);
-  int SubstitutePredicateRegisterField(const Instruction* instr,
-                                       const char* format);
   int SubstituteImmediateField(const Instruction* instr, const char* format);
   int SubstituteLiteralField(const Instruction* instr, const char* format);
   int SubstituteBitfieldImmediateField(const Instruction* instr,
@@ -135,14 +130,6 @@ class Disassembler : public DecoderVisitor {
   int SubstituteBarrierField(const Instruction* instr, const char* format);
   int SubstituteSysOpField(const Instruction* instr, const char* format);
   int SubstituteCrField(const Instruction* instr, const char* format);
-  int SubstituteIntField(const Instruction* instr, const char* format);
-  int SubstituteSVESize(const Instruction* instr, const char* format);
-  int SubstituteTernary(const Instruction* instr, const char* format);
-
-  std::pair<unsigned, unsigned> GetRegNumForField(const Instruction* instr,
-                                                  char reg_prefix,
-                                                  const char* field);
-
   bool RdIsZROrSP(const Instruction* instr) const {
     return (instr->GetRd() == kZeroRegCode);
   }
