@@ -162,6 +162,7 @@ cc_defaults {
     name: "libvixl-defaults",
     srcs: ["src/*.cc"],
     export_include_dirs: ["src"],
+    min_sdk_version: "S",
 }
 
 art_cc_library {
