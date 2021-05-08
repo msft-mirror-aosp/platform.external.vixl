@@ -188,6 +188,17 @@ art_cc_library {
         "com.android.art",
         "com.android.art.debug",
     ],
+
+    static: {
+        cflags: [
+            "-fvisibility=hidden",
+        ],
+    },
+    shared: {
+        cflags: [
+            "-fvisibility=protected",
+        ],
+    },
 }
 
 art_cc_library {
