@@ -268,8 +268,7 @@ class MacroAssembler : public Assembler, public MacroAssemblerInterface {
         generate_simulator_code_(VIXL_AARCH32_GENERATE_SIMULATOR_CODE),
         pool_end_(NULL) {
 #ifdef VIXL_DEBUG
-    SetAllowMacroInstructions(  // NOLINT(clang-analyzer-optin.cplusplus.VirtualCall)
-        true);
+    SetAllowMacroInstructions(true);
 #else
     USE(allow_macro_instructions_);
 #endif
@@ -284,8 +283,7 @@ class MacroAssembler : public Assembler, public MacroAssemblerInterface {
         generate_simulator_code_(VIXL_AARCH32_GENERATE_SIMULATOR_CODE),
         pool_end_(NULL) {
 #ifdef VIXL_DEBUG
-    SetAllowMacroInstructions(  // NOLINT(clang-analyzer-optin.cplusplus.VirtualCall)
-        true);
+    SetAllowMacroInstructions(true);
 #endif
   }
   MacroAssembler(byte* buffer, size_t size, InstructionSet isa = kDefaultISA)
@@ -298,8 +296,7 @@ class MacroAssembler : public Assembler, public MacroAssemblerInterface {
         generate_simulator_code_(VIXL_AARCH32_GENERATE_SIMULATOR_CODE),
         pool_end_(NULL) {
 #ifdef VIXL_DEBUG
-    SetAllowMacroInstructions(  // NOLINT(clang-analyzer-optin.cplusplus.VirtualCall)
-        true);
+    SetAllowMacroInstructions(true);
 #endif
   }
 

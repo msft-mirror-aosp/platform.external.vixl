@@ -164,8 +164,8 @@ class CodeBuffer {
     *has_grown = is_full;
   }
   void EnsureSpaceFor(size_t amount) {
-    bool placeholder;
-    EnsureSpaceFor(amount, &placeholder);
+    bool dummy;
+    EnsureSpaceFor(amount, &dummy);
   }
 
  private:

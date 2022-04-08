@@ -156,8 +156,9 @@ def ClangTidyFiles(files, clang_tidy, jobs = 1, progress_prefix = ''):
 
   queue = TestQueue(prefix = progress_prefix)
 
+  cpp_versions = ['c++98', 'c++11']
   for file in to_check:
-    for cpp_version in config.tested_cpp_standards:
+    for cpp_version in cpp_versions:
       command = [clang_tidy, file] + opts + ['-std=%s' % cpp_version]
       queue.AddTest(file, command=command)
 

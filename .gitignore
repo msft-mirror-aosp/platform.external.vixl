@@ -4,4 +4,5 @@
 .sconsign.dblite
 log/
 obj/
+vixl_stats.csv
 tools/.cached_lint_results.pkl
