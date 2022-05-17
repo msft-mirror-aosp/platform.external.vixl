@@ -72,10 +72,10 @@ license {
 cc_defaults {
     name: "vixl-common",
     host_supported: true,
-    clang_cflags: ["-Wimplicit-fallthrough"],
     cflags: [
         "-Wall",
         "-Werror",
+        "-Wimplicit-fallthrough",
     ],
     cppflags: [
         "-DVIXL_GENERATE_SIMULATOR_INSTRUCTIONS_VALUE=0",
