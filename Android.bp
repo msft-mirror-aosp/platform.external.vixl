@@ -233,6 +233,9 @@ cc_test_host {
     local_include_dirs: [
         "test",
     ],
+    exclude_srcs: [
+        "test/test-donkey.cc"
+    ],
     srcs: [
         "test/*.cc",
         "test/aarch32/*.cc",
