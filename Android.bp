@@ -163,6 +163,17 @@ cc_defaults {
     srcs: ["src/*.cc"],
     export_include_dirs: ["src"],
     min_sdk_version: "S",
+
+    static: {
+        cflags: [
+            "-fvisibility=hidden",
+        ],
+    },
+    shared: {
+        cflags: [
+            "-fvisibility=protected",
+        ],
+    },
 }
 
 art_cc_library {
@@ -188,17 +199,6 @@ art_cc_library {
         "com.android.art",
         "com.android.art.debug",
     ],
-
-    static: {
-        cflags: [
-            "-fvisibility=hidden",
-        ],
-    },
-    shared: {
-        cflags: [
-            "-fvisibility=protected",
-        ],
-    },
 }
 
 art_cc_library {
