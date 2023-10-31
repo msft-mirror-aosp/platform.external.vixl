@@ -184,7 +184,6 @@ art_cc_library {
         "vixl-release",
         "vixl-arm",
         "vixl-arm64",
-        "dex2oat-pgo-defaults",
     ],
 
     target: {
