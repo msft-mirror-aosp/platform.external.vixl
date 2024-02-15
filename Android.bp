@@ -184,7 +184,6 @@ art_cc_library {
         "vixl-release",
         "vixl-arm",
         "vixl-arm64",
-        "dex2oat-pgo-defaults",
     ],
 
     target: {
@@ -234,7 +233,7 @@ cc_test_host {
         "test",
     ],
     exclude_srcs: [
-        "test/test-donkey.cc"
+        "test/test-donkey.cc",
     ],
     srcs: [
         "test/*.cc",
@@ -256,4 +255,44 @@ cc_test_host {
             enabled: true,
         },
     },
+}
+
+cc_genrule {
+    name: "vixl-test-timestamp",
+    srcs: [
+        ":libc++",
+        ":vixl-test-runner",
+        "test/test-trace-reference/**/*",
+    ],
+    compile_multilib: "first",
+    host_supported: true,
+    device_supported: false,
+    cmd: "echo 'Running vixl tests' && " +
+        "cp $(location :vixl-test-runner) $(genDir)/ && " +
+        // Copy needed share libs for vixl-test-runner
+        "cp $(location :libc++) $(genDir)/ && " +
+        "mkdir -p $(genDir)/test/test-trace-reference/ && " +
+        "cp $(locations test/test-trace-reference/**/*) $(genDir)/test/test-trace-reference/ && " +
+        "cd $(genDir) && " +
+        "./vixl-test-runner --run_all 2>&1 && " +
+        "./vixl-test-runner --run_all --debugger 2>&1 && " +
+        "echo 'vixl tests PASSED' && " +
+        "touch vixl-test-timestamp.txt",
+    out: ["vixl-test-timestamp.txt"],
+    enabled: false,
+    target: {
+        linux_glibc_x86_64: {
+            enabled: true,
+        },
+        linux_musl_x86_64: {
+            enabled: true,
+        },
+    },
+}
+
+phony_rule {
+    name: "run-vixl-tests",
+    phony_deps: [
+        "vixl-test-timestamp",
+    ],
 }
