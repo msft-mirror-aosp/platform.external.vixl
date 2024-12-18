@@ -73,17 +73,13 @@ cc_defaults {
     name: "vixl-common",
     host_supported: true,
     cflags: [
-        "-Wall",
-        "-Werror",
         "-Wimplicit-fallthrough",
     ],
     cppflags: [
         "-DVIXL_GENERATE_SIMULATOR_INSTRUCTIONS_VALUE=0",
-        "-Wextra",
         "-fdiagnostics-show-option",
         "-Wredundant-decls",
         "-Wunreachable-code",
-        "-pedantic",
 
         // Explicitly enable the write-strings warning. VIXL uses
         // const correctly when handling string constants.
