@@ -30,6 +30,7 @@
 #include <cmath>
 #include <cstring>
 #include <limits>
+#include <type_traits>
 #include <vector>
 
 #include "compiler-intrinsics-vixl.h"
@@ -238,6 +239,11 @@ inline uint64_t RotateRight(uint64_t value,
   return value & width_mask;
 }
 
+inline uint64_t RotateLeft(uint64_t value,
+                           unsigned int rotate,
+                           unsigned int width) {
+  return RotateRight(value, width - rotate, width);
+}
 
 // Wrapper class for passing FP16 values through the assembler.
 // This is purely to aid with type checking/casting.
@@ -282,17 +288,43 @@ VIXL_DEPRECATED("RawbitsToDouble",
   return RawbitsToDouble(bits);
 }
 
+// Some compilers dislike negating unsigned integers,
+// so we provide an equivalent.
+template <typename T>
+T UnsignedNegate(T value) {
+  VIXL_STATIC_ASSERT(std::is_unsigned<T>::value);
+  return ~value + 1;
+}
+
+template <typename T>
+bool CanBeNegated(T value) {
+  VIXL_STATIC_ASSERT(std::is_signed<T>::value);
+  return (value == std::numeric_limits<T>::min()) ? false : true;
+}
+
+// An absolute operation for signed integers that is defined for results outside
+// the representable range. Specifically, Abs(MIN_INT) is MIN_INT.
+template <typename T>
+T Abs(T val) {
+  // TODO: this static assertion is for signed integer inputs, as that's the
+  // only type tested. However, the code should work for all numeric inputs.
+  // Remove the assertion and this comment when more tests are available.
+  VIXL_STATIC_ASSERT(std::is_signed<T>::value && std::is_integral<T>::value);
+  return ((val >= -std::numeric_limits<T>::max()) && (val < 0)) ? -val : val;
+}
+
 // Convert unsigned to signed numbers in a well-defined way (using two's
 // complement representations).
 inline int64_t RawbitsToInt64(uint64_t bits) {
   return (bits >= UINT64_C(0x8000000000000000))
-             ? (-static_cast<int64_t>(-bits - 1) - 1)
+             ? (-static_cast<int64_t>(UnsignedNegate(bits) - 1) - 1)
              : static_cast<int64_t>(bits);
 }
 
 inline int32_t RawbitsToInt32(uint32_t bits) {
-  return (bits >= UINT64_C(0x80000000)) ? (-static_cast<int32_t>(-bits - 1) - 1)
-                                        : static_cast<int32_t>(bits);
+  return (bits >= UINT64_C(0x80000000))
+             ? (-static_cast<int32_t>(UnsignedNegate(bits) - 1) - 1)
+             : static_cast<int32_t>(bits);
 }
 
 namespace internal {
@@ -318,7 +350,7 @@ class SimFloat16 : public Float16 {
   bool operator>(SimFloat16 rhs) const;
   bool operator==(SimFloat16 rhs) const;
   bool operator!=(SimFloat16 rhs) const;
-  // This is necessary for conversions peformed in (macro asm) Fmov.
+  // This is necessary for conversions performed in (macro asm) Fmov.
   bool operator==(double rhs) const;
   operator double() const;
 };
@@ -475,7 +507,9 @@ inline float FusedMultiplyAdd(float op1, float op2, float a) {
 }
 
 
-inline uint64_t LowestSetBit(uint64_t value) { return value & -value; }
+inline uint64_t LowestSetBit(uint64_t value) {
+  return value & UnsignedNegate(value);
+}
 
 
 template <typename T>
@@ -525,13 +559,14 @@ inline T SignExtend(T val, int size_in_bits) {
 template <typename T>
 T ReverseBytes(T value, int block_bytes_log2) {
   VIXL_ASSERT((sizeof(value) == 4) || (sizeof(value) == 8));
-  VIXL_ASSERT((1U << block_bytes_log2) <= sizeof(value));
+  VIXL_ASSERT((uint64_t{1} << block_bytes_log2) <= sizeof(value));
   // Split the 64-bit value into an 8-bit array, where b[0] is the least
   // significant byte, and b[7] is the most significant.
   uint8_t bytes[8];
   uint64_t mask = UINT64_C(0xff00000000000000);
   for (int i = 7; i >= 0; i--) {
-    bytes[i] = (static_cast<uint64_t>(value) & mask) >> (i * 8);
+    bytes[i] =
+        static_cast<uint8_t>((static_cast<uint64_t>(value) & mask) >> (i * 8));
     mask >>= 8;
   }
 
@@ -586,6 +621,39 @@ inline bool IsAligned(T pointer) {
 template <typename T>
 bool IsWordAligned(T pointer) {
   return IsAligned<4>(pointer);
+}
+
+template <unsigned BITS, typename T>
+bool IsRepeatingPattern(T value) {
+  VIXL_STATIC_ASSERT(std::is_unsigned<T>::value);
+  VIXL_ASSERT(IsMultiple(sizeof(value) * kBitsPerByte, BITS));
+  VIXL_ASSERT(IsMultiple(BITS, 2));
+  VIXL_STATIC_ASSERT(BITS >= 2);
+#if (defined(__x86_64__) || defined(__i386)) && __clang_major__ >= 17 && \
+    __clang_major__ <= 19
+  // Workaround for https://github.com/llvm/llvm-project/issues/108722
+  unsigned hbits = BITS / 2;
+  T midmask = (~static_cast<T>(0) >> BITS) << hbits;
+  // E.g. for bytes in a word (0xb3b2b1b0): .b3b2b1. == .b2b1b0.
+  return (((value >> hbits) & midmask) == ((value << hbits) & midmask));
+#else
+  return value == RotateRight(value, BITS, sizeof(value) * kBitsPerByte);
+#endif
+}
+
+template <typename T>
+bool AllBytesMatch(T value) {
+  return IsRepeatingPattern<kBitsPerByte>(value);
+}
+
+template <typename T>
+bool AllHalfwordsMatch(T value) {
+  return IsRepeatingPattern<kBitsPerByte * 2>(value);
+}
+
+template <typename T>
+bool AllWordsMatch(T value) {
+  return IsRepeatingPattern<kBitsPerByte * 4>(value);
 }
 
 // Increment a pointer until it has the specified alignment. The alignment must
@@ -829,7 +897,7 @@ class Uint32 {
   }
   int32_t GetSigned() const { return data_; }
   Uint32 operator~() const { return Uint32(~data_); }
-  Uint32 operator-() const { return Uint32(-data_); }
+  Uint32 operator-() const { return Uint32(UnsignedNegate(data_)); }
   bool operator==(Uint32 value) const { return data_ == value.data_; }
   bool operator!=(Uint32 value) const { return data_ != value.data_; }
   bool operator>(Uint32 value) const { return data_ > value.data_; }
@@ -897,7 +965,7 @@ class Uint64 {
   Uint32 GetHigh32() const { return Uint32(data_ >> 32); }
   Uint32 GetLow32() const { return Uint32(data_ & 0xffffffff); }
   Uint64 operator~() const { return Uint64(~data_); }
-  Uint64 operator-() const { return Uint64(-data_); }
+  Uint64 operator-() const { return Uint64(UnsignedNegate(data_)); }
   bool operator==(Uint64 value) const { return data_ == value.data_; }
   bool operator!=(Uint64 value) const { return data_ != value.data_; }
   Uint64 operator+(Uint64 value) const { return Uint64(data_ + value.data_); }
@@ -1203,7 +1271,7 @@ T FPRound(int64_t sign,
     // For subnormal outputs, the shift must be adjusted by the exponent. The +1
     // is necessary because the exponent of a subnormal value (encoded as 0) is
     // the same as the exponent of the smallest normal value (encoded as 1).
-    shift += -exponent + 1;
+    shift += static_cast<int>(-exponent + 1);
 
     // Handle inputs that would produce a zero output.
     //

@@ -24,12 +24,13 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include "cpu-features-auditor-aarch64.h"
+
 #include "cpu-features.h"
 #include "globals-vixl.h"
 #include "utils-vixl.h"
-#include "decoder-aarch64.h"
 
-#include "cpu-features-auditor-aarch64.h"
+#include "decoder-aarch64.h"
 
 namespace vixl {
 namespace aarch64 {
@@ -246,16 +247,47 @@ void CPUFeaturesAuditor::VisitConditionalSelect(const Instruction* instr) {
 
 void CPUFeaturesAuditor::VisitCrypto2RegSHA(const Instruction* instr) {
   RecordInstructionFeaturesScope scope(this);
+  if (form_hash_ == "sha256su0_vv_cryptosha2"_h) {
+    scope.Record(CPUFeatures::kNEON, CPUFeatures::kSHA2);
+  } else {
+    scope.Record(CPUFeatures::kNEON, CPUFeatures::kSHA1);
+  }
   USE(instr);
 }
 
 void CPUFeaturesAuditor::VisitCrypto3RegSHA(const Instruction* instr) {
   RecordInstructionFeaturesScope scope(this);
+  switch (form_hash_) {
+    case "sha1c_qsv_cryptosha3"_h:
+    case "sha1m_qsv_cryptosha3"_h:
+    case "sha1p_qsv_cryptosha3"_h:
+    case "sha1su0_vvv_cryptosha3"_h:
+      scope.Record(CPUFeatures::kNEON, CPUFeatures::kSHA1);
+      break;
+    case "sha256h_qqv_cryptosha3"_h:
+    case "sha256h2_qqv_cryptosha3"_h:
+    case "sha256su1_vvv_cryptosha3"_h:
+      scope.Record(CPUFeatures::kNEON, CPUFeatures::kSHA2);
+      break;
+  }
   USE(instr);
 }
 
 void CPUFeaturesAuditor::VisitCryptoAES(const Instruction* instr) {
   RecordInstructionFeaturesScope scope(this);
+  scope.Record(CPUFeatures::kNEON, CPUFeatures::kAES);
+  USE(instr);
+}
+
+void CPUFeaturesAuditor::VisitCryptoSM3(const Instruction* instr) {
+  RecordInstructionFeaturesScope scope(this);
+  scope.Record(CPUFeatures::kNEON, CPUFeatures::kSM3);
+  USE(instr);
+}
+
+void CPUFeaturesAuditor::VisitCryptoSM4(const Instruction* instr) {
+  RecordInstructionFeaturesScope scope(this);
+  scope.Record(CPUFeatures::kNEON, CPUFeatures::kSM4);
   USE(instr);
 }
 
@@ -507,8 +539,6 @@ void CPUFeaturesAuditor::VisitFPImmediate(const Instruction* instr) {
 
 void CPUFeaturesAuditor::VisitFPIntegerConvert(const Instruction* instr) {
   RecordInstructionFeaturesScope scope(this);
-  // All of these instructions require FP.
-  scope.Record(CPUFeatures::kFP);
   switch (instr->Mask(FPIntegerConvertMask)) {
     case FCVTAS_wh:
     case FCVTAS_xh:
@@ -538,17 +568,23 @@ void CPUFeaturesAuditor::VisitFPIntegerConvert(const Instruction* instr) {
     case SCVTF_hx:
     case UCVTF_hw:
     case UCVTF_hx:
+      scope.Record(CPUFeatures::kFP);
       scope.Record(CPUFeatures::kFPHalf);
+      return;
+    case FMOV_dx:
+      scope.RecordOneOrBothOf(CPUFeatures::kFP, CPUFeatures::kNEON);
       return;
     case FMOV_d1_x:
     case FMOV_x_d1:
+      scope.Record(CPUFeatures::kFP);
       scope.Record(CPUFeatures::kNEON);
       return;
     case FJCVTZS:
+      scope.Record(CPUFeatures::kFP);
       scope.Record(CPUFeatures::kJSCVT);
       return;
     default:
-      // No special CPU features.
+      scope.Record(CPUFeatures::kFP);
       return;
   }
 }
@@ -731,6 +767,12 @@ void CPUFeaturesAuditor::VisitNEON3Different(const Instruction* instr) {
   RecordInstructionFeaturesScope scope(this);
   // All of these instructions require NEON.
   scope.Record(CPUFeatures::kNEON);
+  if (form_hash_ == "pmull_asimddiff_l"_h) {
+    if (instr->GetNEONSize() == 3) {
+      // Source is 1D or 2D, destination is 1Q.
+      scope.Record(CPUFeatures::kPmull1Q);
+    }
+  }
   USE(instr);
 }
 
@@ -1265,80 +1307,93 @@ VIXL_SIMPLE_SVE_VISITOR_LIST(VIXL_DEFINE_SIMPLE_SVE_VISITOR)
 
 void CPUFeaturesAuditor::VisitSystem(const Instruction* instr) {
   RecordInstructionFeaturesScope scope(this);
-  if (instr->Mask(SystemHintFMask) == SystemHintFixed) {
-    CPUFeatures required;
-    switch (instr->GetInstructionBits()) {
-      case PACIA1716:
-      case PACIB1716:
-      case AUTIA1716:
-      case AUTIB1716:
-      case PACIAZ:
-      case PACIASP:
-      case PACIBZ:
-      case PACIBSP:
-      case AUTIAZ:
-      case AUTIASP:
-      case AUTIBZ:
-      case AUTIBSP:
-      case XPACLRI:
-        required.Combine(CPUFeatures::kPAuth);
-        break;
-      default:
-        switch (instr->GetImmHint()) {
-          case ESB:
-            required.Combine(CPUFeatures::kRAS);
-            break;
-          case BTI:
-          case BTI_j:
-          case BTI_c:
-          case BTI_jc:
-            required.Combine(CPUFeatures::kBTI);
-            break;
-          default:
-            break;
-        }
-        break;
-    }
 
-    // These are all HINT instructions, and behave as NOPs if the corresponding
-    // features are not implemented, so we record the corresponding features
-    // only if they are available.
-    if (available_.Has(required)) scope.Record(required);
-  } else if (instr->Mask(SystemSysMask) == SYS) {
-    switch (instr->GetSysOp()) {
-      // DC instruction variants.
-      case CVAP:
-        scope.Record(CPUFeatures::kDCPoP);
-        break;
-      case CVADP:
-        scope.Record(CPUFeatures::kDCCVADP);
-        break;
-      case IVAU:
-      case CVAC:
-      case CVAU:
-      case CIVAC:
-        // No special CPU features.
-        break;
-    }
-  } else if (instr->Mask(SystemPStateFMask) == SystemPStateFixed) {
-    switch (instr->Mask(SystemPStateMask)) {
-      case CFINV:
-        scope.Record(CPUFeatures::kFlagM);
-        break;
-      case AXFLAG:
-      case XAFLAG:
-        scope.Record(CPUFeatures::kAXFlag);
-        break;
-    }
-  } else if (instr->Mask(SystemSysRegFMask) == SystemSysRegFixed) {
-    if (instr->Mask(SystemSysRegMask) == MRS) {
+  CPUFeatures required;
+  switch (form_hash_) {
+    case "pacib1716_hi_hints"_h:
+    case "pacia1716_hi_hints"_h:
+    case "pacibsp_hi_hints"_h:
+    case "paciasp_hi_hints"_h:
+    case "pacibz_hi_hints"_h:
+    case "paciaz_hi_hints"_h:
+    case "autib1716_hi_hints"_h:
+    case "autia1716_hi_hints"_h:
+    case "autibsp_hi_hints"_h:
+    case "autiasp_hi_hints"_h:
+    case "autibz_hi_hints"_h:
+    case "autiaz_hi_hints"_h:
+    case "xpaclri_hi_hints"_h:
+      required.Combine(CPUFeatures::kPAuth);
+      break;
+    case "esb_hi_hints"_h:
+      required.Combine(CPUFeatures::kRAS);
+      break;
+    case "bti_hb_hints"_h:
+      required.Combine(CPUFeatures::kBTI);
+      break;
+  }
+
+  // The instructions above are all HINTs and behave as NOPs if the
+  // corresponding features are not implemented, so we record the corresponding
+  // features only if they are available.
+  if (available_.Has(required)) scope.Record(required);
+
+  switch (form_hash_) {
+    case "cfinv_m_pstate"_h:
+      scope.Record(CPUFeatures::kFlagM);
+      break;
+    case "axflag_m_pstate"_h:
+    case "xaflag_m_pstate"_h:
+      scope.Record(CPUFeatures::kAXFlag);
+      break;
+    case "mrs_rs_systemmove"_h:
       switch (instr->GetImmSystemRegister()) {
         case RNDR:
         case RNDRRS:
           scope.Record(CPUFeatures::kRNG);
           break;
       }
-    }
+      break;
+    case "sys_cr_systeminstrs"_h:
+      switch (instr->GetSysOp()) {
+        // DC instruction variants.
+        case CGVAC:
+        case CGDVAC:
+        case CGVAP:
+        case CGDVAP:
+        case CIGVAC:
+        case CIGDVAC:
+        case GVA:
+        case GZVA:
+          scope.Record(CPUFeatures::kMTE);
+          break;
+        case CVAP:
+          scope.Record(CPUFeatures::kDCPoP);
+          break;
+        case CVADP:
+          scope.Record(CPUFeatures::kDCCVADP);
+          break;
+        case IVAU:
+        case CVAC:
+        case CVAU:
+        case CIVAC:
+        case ZVA:
+          // No special CPU features.
+          break;
+        case GCSPUSHM:
+        case GCSSS1:
+          scope.Record(CPUFeatures::kGCS);
+          break;
+      }
+      break;
+    case "sysl_rc_systeminstrs"_h:
+      switch (instr->GetSysOp()) {
+        case GCSPOPM:
+        case GCSSS2:
+          scope.Record(CPUFeatures::kGCS);
+          break;
+      }
+      break;
   }
 }
 
@@ -1392,9 +1447,9 @@ void CPUFeaturesAuditor::VisitUnimplemented(const Instruction* instr) {
 void CPUFeaturesAuditor::Visit(Metadata* metadata, const Instruction* instr) {
   VIXL_ASSERT(metadata->count("form") > 0);
   const std::string& form = (*metadata)["form"];
-  uint32_t form_hash = Hash(form.c_str());
+  form_hash_ = Hash(form.c_str());
   const FormToVisitorFnMap* fv = CPUFeaturesAuditor::GetFormToVisitorFnMap();
-  FormToVisitorFnMap::const_iterator it = fv->find(form_hash);
+  FormToVisitorFnMap::const_iterator it = fv->find(form_hash_);
   if (it == fv->end()) {
     RecordInstructionFeaturesScope scope(this);
     std::map<uint32_t, const CPUFeatures> features = {
@@ -1725,10 +1780,116 @@ void CPUFeaturesAuditor::Visit(Metadata* metadata, const Instruction* instr) {
          CPUFeatures(CPUFeatures::kSVE, CPUFeatures::kSVEI8MM)},
         {"sudot_z_zzzi_s"_h,
          CPUFeatures(CPUFeatures::kSVE, CPUFeatures::kSVEI8MM)},
+        {"addg_64_addsub_immtags"_h, CPUFeatures::kMTE},
+        {"gmi_64g_dp_2src"_h, CPUFeatures::kMTE},
+        {"irg_64i_dp_2src"_h, CPUFeatures::kMTE},
+        {"ldg_64loffset_ldsttags"_h, CPUFeatures::kMTE},
+        {"st2g_64soffset_ldsttags"_h, CPUFeatures::kMTE},
+        {"st2g_64spost_ldsttags"_h, CPUFeatures::kMTE},
+        {"st2g_64spre_ldsttags"_h, CPUFeatures::kMTE},
+        {"stgp_64_ldstpair_off"_h, CPUFeatures::kMTE},
+        {"stgp_64_ldstpair_post"_h, CPUFeatures::kMTE},
+        {"stgp_64_ldstpair_pre"_h, CPUFeatures::kMTE},
+        {"stg_64soffset_ldsttags"_h, CPUFeatures::kMTE},
+        {"stg_64spost_ldsttags"_h, CPUFeatures::kMTE},
+        {"stg_64spre_ldsttags"_h, CPUFeatures::kMTE},
+        {"stz2g_64soffset_ldsttags"_h, CPUFeatures::kMTE},
+        {"stz2g_64spost_ldsttags"_h, CPUFeatures::kMTE},
+        {"stz2g_64spre_ldsttags"_h, CPUFeatures::kMTE},
+        {"stzg_64soffset_ldsttags"_h, CPUFeatures::kMTE},
+        {"stzg_64spost_ldsttags"_h, CPUFeatures::kMTE},
+        {"stzg_64spre_ldsttags"_h, CPUFeatures::kMTE},
+        {"subg_64_addsub_immtags"_h, CPUFeatures::kMTE},
+        {"subps_64s_dp_2src"_h, CPUFeatures::kMTE},
+        {"subp_64s_dp_2src"_h, CPUFeatures::kMTE},
+        {"cpyen_cpy_memcms"_h, CPUFeatures::kMOPS},
+        {"cpyern_cpy_memcms"_h, CPUFeatures::kMOPS},
+        {"cpyewn_cpy_memcms"_h, CPUFeatures::kMOPS},
+        {"cpye_cpy_memcms"_h, CPUFeatures::kMOPS},
+        {"cpyfen_cpy_memcms"_h, CPUFeatures::kMOPS},
+        {"cpyfern_cpy_memcms"_h, CPUFeatures::kMOPS},
+        {"cpyfewn_cpy_memcms"_h, CPUFeatures::kMOPS},
+        {"cpyfe_cpy_memcms"_h, CPUFeatures::kMOPS},
+        {"cpyfmn_cpy_memcms"_h, CPUFeatures::kMOPS},
+        {"cpyfmrn_cpy_memcms"_h, CPUFeatures::kMOPS},
+        {"cpyfmwn_cpy_memcms"_h, CPUFeatures::kMOPS},
+        {"cpyfm_cpy_memcms"_h, CPUFeatures::kMOPS},
+        {"cpyfpn_cpy_memcms"_h, CPUFeatures::kMOPS},
+        {"cpyfprn_cpy_memcms"_h, CPUFeatures::kMOPS},
+        {"cpyfpwn_cpy_memcms"_h, CPUFeatures::kMOPS},
+        {"cpyfp_cpy_memcms"_h, CPUFeatures::kMOPS},
+        {"cpymn_cpy_memcms"_h, CPUFeatures::kMOPS},
+        {"cpymrn_cpy_memcms"_h, CPUFeatures::kMOPS},
+        {"cpymwn_cpy_memcms"_h, CPUFeatures::kMOPS},
+        {"cpym_cpy_memcms"_h, CPUFeatures::kMOPS},
+        {"cpypn_cpy_memcms"_h, CPUFeatures::kMOPS},
+        {"cpyprn_cpy_memcms"_h, CPUFeatures::kMOPS},
+        {"cpypwn_cpy_memcms"_h, CPUFeatures::kMOPS},
+        {"cpyp_cpy_memcms"_h, CPUFeatures::kMOPS},
+        {"seten_set_memcms"_h, CPUFeatures::kMOPS},
+        {"sete_set_memcms"_h, CPUFeatures::kMOPS},
+        {"setgen_set_memcms"_h,
+         CPUFeatures(CPUFeatures::kMOPS, CPUFeatures::kMTE)},
+        {"setge_set_memcms"_h,
+         CPUFeatures(CPUFeatures::kMOPS, CPUFeatures::kMTE)},
+        {"setgmn_set_memcms"_h,
+         CPUFeatures(CPUFeatures::kMOPS, CPUFeatures::kMTE)},
+        {"setgm_set_memcms"_h,
+         CPUFeatures(CPUFeatures::kMOPS, CPUFeatures::kMTE)},
+        {"setgpn_set_memcms"_h,
+         CPUFeatures(CPUFeatures::kMOPS, CPUFeatures::kMTE)},
+        {"setgp_set_memcms"_h,
+         CPUFeatures(CPUFeatures::kMOPS, CPUFeatures::kMTE)},
+        {"setmn_set_memcms"_h, CPUFeatures::kMOPS},
+        {"setm_set_memcms"_h, CPUFeatures::kMOPS},
+        {"setpn_set_memcms"_h, CPUFeatures::kMOPS},
+        {"setp_set_memcms"_h, CPUFeatures::kMOPS},
+        {"abs_32_dp_1src"_h, CPUFeatures::kCSSC},
+        {"abs_64_dp_1src"_h, CPUFeatures::kCSSC},
+        {"cnt_32_dp_1src"_h, CPUFeatures::kCSSC},
+        {"cnt_64_dp_1src"_h, CPUFeatures::kCSSC},
+        {"ctz_32_dp_1src"_h, CPUFeatures::kCSSC},
+        {"ctz_64_dp_1src"_h, CPUFeatures::kCSSC},
+        {"smax_32_dp_2src"_h, CPUFeatures::kCSSC},
+        {"smax_64_dp_2src"_h, CPUFeatures::kCSSC},
+        {"smin_32_dp_2src"_h, CPUFeatures::kCSSC},
+        {"smin_64_dp_2src"_h, CPUFeatures::kCSSC},
+        {"umax_32_dp_2src"_h, CPUFeatures::kCSSC},
+        {"umax_64_dp_2src"_h, CPUFeatures::kCSSC},
+        {"umin_32_dp_2src"_h, CPUFeatures::kCSSC},
+        {"umin_64_dp_2src"_h, CPUFeatures::kCSSC},
+        {"smax_32_minmax_imm"_h, CPUFeatures::kCSSC},
+        {"smax_64_minmax_imm"_h, CPUFeatures::kCSSC},
+        {"smin_32_minmax_imm"_h, CPUFeatures::kCSSC},
+        {"smin_64_minmax_imm"_h, CPUFeatures::kCSSC},
+        {"umax_32u_minmax_imm"_h, CPUFeatures::kCSSC},
+        {"umax_64u_minmax_imm"_h, CPUFeatures::kCSSC},
+        {"umin_32u_minmax_imm"_h, CPUFeatures::kCSSC},
+        {"umin_64u_minmax_imm"_h, CPUFeatures::kCSSC},
+        {"bcax_vvv16_crypto4"_h,
+         CPUFeatures(CPUFeatures::kNEON, CPUFeatures::kSHA3)},
+        {"eor3_vvv16_crypto4"_h,
+         CPUFeatures(CPUFeatures::kNEON, CPUFeatures::kSHA3)},
+        {"rax1_vvv2_cryptosha512_3"_h,
+         CPUFeatures(CPUFeatures::kNEON, CPUFeatures::kSHA3)},
+        {"xar_vvv2_crypto3_imm6"_h,
+         CPUFeatures(CPUFeatures::kNEON, CPUFeatures::kSHA3)},
+        {"sha512h_qqv_cryptosha512_3"_h,
+         CPUFeatures(CPUFeatures::kNEON, CPUFeatures::kSHA512)},
+        {"sha512h2_qqv_cryptosha512_3"_h,
+         CPUFeatures(CPUFeatures::kNEON, CPUFeatures::kSHA512)},
+        {"sha512su0_vv2_cryptosha512_2"_h,
+         CPUFeatures(CPUFeatures::kNEON, CPUFeatures::kSHA512)},
+        {"sha512su1_vvv2_cryptosha512_3"_h,
+         CPUFeatures(CPUFeatures::kNEON, CPUFeatures::kSHA512)},
+        {"pmullb_z_zz_q"_h,
+         CPUFeatures(CPUFeatures::kSVE2, CPUFeatures::kSVEPmull128)},
+        {"pmullt_z_zz_q"_h,
+         CPUFeatures(CPUFeatures::kSVE2, CPUFeatures::kSVEPmull128)},
     };
 
-    if (features.count(form_hash) > 0) {
-      scope.Record(features[form_hash]);
+    if (features.count(form_hash_) > 0) {
+      scope.Record(features[form_hash_]);
     }
   } else {
     (it->second)(this, instr);

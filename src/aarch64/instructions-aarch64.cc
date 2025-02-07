@@ -25,6 +25,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "instructions-aarch64.h"
+
 #include "assembler-aarch64.h"
 
 namespace vixl {
@@ -198,6 +199,7 @@ bool Instruction::CanTakeSVEMovprfx(uint32_t form_hash,
     case "decd_z_zs"_h:
     case "dech_z_zs"_h:
     case "decw_z_zs"_h:
+    case "ext_z_zi_des"_h:
     case "faddp_z_p_zz"_h:
     case "fmaxnmp_z_p_zz"_h:
     case "fmaxp_z_p_zz"_h:
@@ -210,7 +212,6 @@ bool Instruction::CanTakeSVEMovprfx(uint32_t form_hash,
     case "insr_z_v"_h:
     case "smaxp_z_p_zz"_h:
     case "sminp_z_p_zz"_h:
-    case "splice_z_p_zz_con"_h:
     case "splice_z_p_zz_des"_h:
     case "sqcadd_z_zz"_h:
     case "sqdecd_z_zs"_h:
@@ -597,6 +598,28 @@ std::pair<int, int> Instruction::GetSVEMulLongZmAndIndex() const {
       break;
     default:
       VIXL_UNIMPLEMENTED();
+      break;
+  }
+  return std::make_pair(reg_code, index);
+}
+
+// Get the register and index for NEON indexed multiplies.
+std::pair<int, int> Instruction::GetNEONMulRmAndIndex() const {
+  int reg_code = GetRm();
+  int index = (GetNEONH() << 2) | (GetNEONL() << 1) | GetNEONM();
+  switch (GetNEONSize()) {
+    case 0:  // FP H-sized elements.
+    case 1:  // Integer H-sized elements.
+      // 4-bit Rm, 3-bit index.
+      reg_code &= 0xf;
+      break;
+    case 2:  // S-sized elements.
+      // 5-bit Rm, 2-bit index.
+      index >>= 1;
+      break;
+    case 3:  // FP D-sized elements.
+      // 5-bit Rm, 1-bit index.
+      index >>= 2;
       break;
   }
   return std::make_pair(reg_code, index);
@@ -1010,6 +1033,8 @@ VectorFormat VectorFormatHalfWidth(VectorFormat vform) {
       return kFormat4H;
     case kFormat2D:
       return kFormat2S;
+    case kFormat1Q:
+      return kFormat1D;
     case kFormatH:
       return kFormatB;
     case kFormatS:
@@ -1022,6 +1047,8 @@ VectorFormat VectorFormatHalfWidth(VectorFormat vform) {
       return kFormatVnH;
     case kFormatVnD:
       return kFormatVnS;
+    case kFormatVnQ:
+      return kFormatVnD;
     default:
       VIXL_UNREACHABLE();
       return kFormatUndefined;
@@ -1094,6 +1121,8 @@ VectorFormat VectorFormatHalfWidthDoubleLanes(VectorFormat vform) {
       return kFormat2S;
     case kFormat2D:
       return kFormat4S;
+    case kFormat1Q:
+      return kFormat2D;
     case kFormatVnH:
       return kFormatVnB;
     case kFormatVnS:
@@ -1245,6 +1274,7 @@ unsigned RegisterSizeInBitsFromFormat(VectorFormat vform) {
     case kFormat8H:
     case kFormat4S:
     case kFormat2D:
+    case kFormat1Q:
       return kQRegSize;
     default:
       VIXL_UNREACHABLE();
@@ -1282,6 +1312,7 @@ unsigned LaneSizeInBitsFromFormat(VectorFormat vform) {
     case kFormat2D:
     case kFormatVnD:
       return 64;
+    case kFormat1Q:
     case kFormatVnQ:
       return 128;
     case kFormatVnO:
@@ -1347,6 +1378,7 @@ int LaneCountFromFormat(VectorFormat vform) {
     case kFormat2D:
       return 2;
     case kFormat1D:
+    case kFormat1Q:
     case kFormatB:
     case kFormatH:
     case kFormatS:

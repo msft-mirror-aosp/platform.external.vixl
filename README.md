@@ -1,5 +1,5 @@
-VIXL: ARMv8 Runtime Code Generation Library
-===========================================
+VIXL: ARMv8 Runtime Code Generation Library 8.0.0
+=================================================
 
 Contents:
 
@@ -48,7 +48,7 @@ Requirements
 
 To build VIXL the following software is required:
 
- 1. Python 2.7
+ 1. Python 3.5+
  2. SCons 2.0
  3. GCC 4.8+ or Clang 4.0+
 
@@ -61,8 +61,8 @@ software is also required:
 
  1. Git
  2. [Google's `cpplint.py`][cpplint]
- 3. clang-format-4.0
- 4. clang-tidy-4.0
+ 3. clang-format 11+
+ 4. clang-tidy 11+
 
 Refer to the 'Usage' section for details.
 

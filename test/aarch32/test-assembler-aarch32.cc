@@ -177,17 +177,23 @@ namespace aarch32 {
 #ifdef VIXL_INCLUDE_SIMULATOR_AARCH32
 // No simulator yet. We can't test the results.
 
-#define ASSERT_EQUAL_32(expected, result)
+#define ASSERT_EQUAL_32(expected, result) \
+  USE(expected, result)
 
-#define ASSERT_EQUAL_64(expected, result)
+#define ASSERT_EQUAL_64(expected, result) \
+  USE(expected, result)
 
-#define ASSERT_EQUAL_128(expected_h, expected_l, result)
+#define ASSERT_EQUAL_128(expected_h, expected_l, result) \
+  USE(expected_h, expected_l, result)
 
-#define ASSERT_EQUAL_FP32(expected, result)
+#define ASSERT_EQUAL_FP32(expected, result) \
+  USE(expected, result)
 
-#define ASSERT_EQUAL_FP64(expected, result)
+#define ASSERT_EQUAL_FP64(expected, result) \
+  USE(expected, result)
 
-#define ASSERT_EQUAL_NZCV(expected)
+#define ASSERT_EQUAL_NZCV(expected) \
+  USE(expected)
 
 #else
 
@@ -1490,7 +1496,7 @@ void EmitLdrdLiteralTest(MacroAssembler* masm, TestMacroAssembler* test) {
     VIXL_CHECK(masm->GetCursorOffset() == end);
   }
 
-  // Check that the pool has not been emited along the way.
+  // Check that the pool has not been emitted along the way.
   CHECK_POOL_SIZE(8);
   // This extra instruction should trigger an emit of the pool.
   __ Nop();
@@ -3634,8 +3640,6 @@ static void NearBranchAndLiteralFuzzHelper(InstructionSet isa,
   const int label_count = 15;
   const int literal_count = 31;
   Label* labels;
-  uint64_t* literal_values;
-  Literal<uint64_t>* literals[literal_count];
 
   // Use multiple iterations, as each produces a different predictably random
   // sequence.
@@ -3653,7 +3657,7 @@ static void NearBranchAndLiteralFuzzHelper(InstructionSet isa,
   // below). The cases are split in 4 groups:
   //
   //   - 0..3: Generate various amount of nops.
-  //   - 4..7: Generate various load intstructions with literals.
+  //   - 4..7: Generate various load instructions with literals.
   //   - 8..14: Generate various branch instructions.
   //   - 15..19: Generate various amount of nops.
   //
@@ -3679,12 +3683,13 @@ static void NearBranchAndLiteralFuzzHelper(InstructionSet isa,
         labels = new Label[label_count];
 
         // Create new literal values.
-        literal_values = new uint64_t[literal_count];
+        std::vector<uint64_t> literal_values;
+        std::vector<Literal<uint64_t>> literals;
         for (int lit = 0; lit < literal_count; lit++) {
           // TODO: Generate pseudo-random data for literals. At the moment, the
           // disassembler breaks if we do this.
-          literal_values[lit] = lit;
-          literals[lit] = new Literal<uint64_t>(literal_values[lit]);
+          literal_values.push_back(lit);
+          literals.emplace_back(Literal<uint64_t>(literal_values[lit]));
         }
 
         for (;;) {
@@ -3736,13 +3741,13 @@ static void NearBranchAndLiteralFuzzHelper(InstructionSet isa,
               __ Nop();
               break;
             case 4:
-              __ Ldr(r2, literals[literal_index]);
+              __ Ldr(r2, &literals[literal_index]);
               __ Cmp(r2, static_cast<uint32_t>(literal_values[literal_index]));
               __ B(ne, &fail);
               __ Mov(r2, 0);
               break;
             case 5:
-              __ Ldrb(r2, literals[literal_index]);
+              __ Ldrb(r2, &literals[literal_index]);
               __ Cmp(r2,
                      static_cast<uint32_t>(literal_values[literal_index]) &
                          0xff);
@@ -3750,7 +3755,7 @@ static void NearBranchAndLiteralFuzzHelper(InstructionSet isa,
               __ Mov(r2, 0);
               break;
             case 6:
-              __ Ldrd(r2, r3, literals[literal_index]);
+              __ Ldrd(r2, r3, &literals[literal_index]);
               __ Cmp(r2, static_cast<uint32_t>(literal_values[literal_index]));
               __ B(ne, &fail);
               __ Mov(r2, 0);
@@ -3761,7 +3766,7 @@ static void NearBranchAndLiteralFuzzHelper(InstructionSet isa,
               __ Mov(r3, 0);
               break;
             case 7:
-              __ Vldr(s0, literals[literal_index]);
+              __ Vldr(s0, &literals[literal_index]);
               __ Vmov(s1, static_cast<uint32_t>(literal_values[literal_index]));
               __ Vcmp(s0, s1);
               __ B(ne, &fail);
@@ -3875,9 +3880,6 @@ static void NearBranchAndLiteralFuzzHelper(InstructionSet isa,
         // independent.
         masm.FinalizeCode(MacroAssembler::kFallThrough);
         delete[] labels;
-        for (int lit = 0; lit < literal_count; lit++) {
-          delete literals[lit];
-        }
       }
     }
   }
@@ -4849,7 +4851,7 @@ TEST_T32(branch_fuzz_example) {
 
 // Generate a "B" and a "Cbz" which have the same checkpoint. Without proper
 // management (i.e. if the veneers were only generated at the shared
-// checkpoint), one one of the branches would be out of range.
+// checkpoint), one of the branches would be out of range.
 TEST_T32(veneer_simultaneous) {
   SETUP();
 
@@ -5109,7 +5111,7 @@ TEST_T32(veneer_and_literal4) {
   __ Ldr(r11, literal);
 
   // The range for ldr is 4095, the range for cbz is 127. Generate nops
-  // to have the ldr becomming out of range just before the cbz.
+  // to have the ldr becoming out of range just before the cbz.
   const int NUM_NOPS = 2044;
   const int NUM_RANGE = 58;
 
@@ -5184,7 +5186,7 @@ TEST_T32(veneer_and_literal5) {
       __ add(r1, r1, 3);
     }
     __ Bind(&labels[test_num]);
-    // Emit the literal pool if it has not beeen emitted (it's the case for
+    // Emit the literal pool if it has not been emitted (it's the case for
     // the lower values of test_num).
     __ EmitLiteralPool(PoolManager<int32_t>::kBranchRequired);
   }

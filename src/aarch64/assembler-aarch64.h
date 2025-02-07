@@ -33,6 +33,7 @@
 #include "../globals-vixl.h"
 #include "../invalset-vixl.h"
 #include "../utils-vixl.h"
+
 #include "operands-aarch64.h"
 
 namespace vixl {
@@ -2157,6 +2158,9 @@ class Assembler : public vixl::internal::AssemblerBase {
   // System instruction with pre-encoded op (op1:crn:crm:op2).
   void sys(int op, const Register& xt = xzr);
 
+  // System instruction with result.
+  void sysl(int op, const Register& xt = xzr);
+
   // System data cache operation.
   void dc(DataCacheOp op, const Register& rt);
 
@@ -3616,6 +3620,123 @@ class Assembler : public vixl::internal::AssemblerBase {
 
   // Unsigned 8-bit integer matrix multiply-accumulate (vector).
   void ummla(const VRegister& vd, const VRegister& vn, const VRegister& vm);
+
+  // Bit Clear and exclusive-OR.
+  void bcax(const VRegister& vd,
+            const VRegister& vn,
+            const VRegister& vm,
+            const VRegister& va);
+
+  // Three-way Exclusive-OR.
+  void eor3(const VRegister& vd,
+            const VRegister& vn,
+            const VRegister& vm,
+            const VRegister& va);
+
+  // Exclusive-OR and Rotate.
+  void xar(const VRegister& vd,
+           const VRegister& vn,
+           const VRegister& vm,
+           int rotate);
+
+  // Rotate and Exclusive-OR
+  void rax1(const VRegister& vd, const VRegister& vn, const VRegister& vm);
+
+  // SHA1 hash update (choose).
+  void sha1c(const VRegister& vd, const VRegister& vn, const VRegister& vm);
+
+  // SHA1 fixed rotate.
+  void sha1h(const VRegister& sd, const VRegister& sn);
+
+  // SHA1 hash update (majority).
+  void sha1m(const VRegister& vd, const VRegister& vn, const VRegister& vm);
+
+  // SHA1 hash update (parity).
+  void sha1p(const VRegister& vd, const VRegister& vn, const VRegister& vm);
+
+  // SHA1 schedule update 0.
+  void sha1su0(const VRegister& vd, const VRegister& vn, const VRegister& vm);
+
+  // SHA1 schedule update 1.
+  void sha1su1(const VRegister& vd, const VRegister& vn);
+
+  // SHA256 hash update (part 1).
+  void sha256h(const VRegister& vd, const VRegister& vn, const VRegister& vm);
+
+  // SHA256 hash update (part 2).
+  void sha256h2(const VRegister& vd, const VRegister& vn, const VRegister& vm);
+
+  // SHA256 schedule update 0.
+  void sha256su0(const VRegister& vd, const VRegister& vn);
+
+  // SHA256 schedule update 1.
+  void sha256su1(const VRegister& vd, const VRegister& vn, const VRegister& vm);
+
+  // SHA512 hash update part 1.
+  void sha512h(const VRegister& vd, const VRegister& vn, const VRegister& vm);
+
+  // SHA512 hash update part 2.
+  void sha512h2(const VRegister& vd, const VRegister& vn, const VRegister& vm);
+
+  // SHA512 schedule Update 0.
+  void sha512su0(const VRegister& vd, const VRegister& vn);
+
+  // SHA512 schedule Update 1.
+  void sha512su1(const VRegister& vd, const VRegister& vn, const VRegister& vm);
+
+  // AES single round decryption.
+  void aesd(const VRegister& vd, const VRegister& vn);
+
+  // AES single round encryption.
+  void aese(const VRegister& vd, const VRegister& vn);
+
+  // AES inverse mix columns.
+  void aesimc(const VRegister& vd, const VRegister& vn);
+
+  // AES mix columns.
+  void aesmc(const VRegister& vd, const VRegister& vn);
+
+  // SM3PARTW1.
+  void sm3partw1(const VRegister& vd, const VRegister& vn, const VRegister& vm);
+
+  // SM3PARTW2.
+  void sm3partw2(const VRegister& vd, const VRegister& vn, const VRegister& vm);
+
+  // SM3SS1.
+  void sm3ss1(const VRegister& vd,
+              const VRegister& vn,
+              const VRegister& vm,
+              const VRegister& va);
+
+  // SM3TT1A.
+  void sm3tt1a(const VRegister& vd,
+               const VRegister& vn,
+               const VRegister& vm,
+               int index);
+
+  // SM3TT1B.
+  void sm3tt1b(const VRegister& vd,
+               const VRegister& vn,
+               const VRegister& vm,
+               int index);
+
+  // SM3TT2A.
+  void sm3tt2a(const VRegister& vd,
+               const VRegister& vn,
+               const VRegister& vm,
+               int index);
+
+  // SM3TT2B.
+  void sm3tt2b(const VRegister& vd,
+               const VRegister& vn,
+               const VRegister& vm,
+               int index);
+
+  // SM4 Encode.
+  void sm4e(const VRegister& vd, const VRegister& vn);
+
+  // SM4 Key.
+  void sm4ekey(const VRegister& vd, const VRegister& vn, const VRegister& vm);
 
   // Scalable Vector Extensions.
 
@@ -6901,6 +7022,191 @@ class Assembler : public vixl::internal::AssemblerBase {
              const ZRegister& zm,
              int index);
 
+  // Add with Tag.
+  void addg(const Register& xd, const Register& xn, int offset, int tag_offset);
+
+  // Tag Mask Insert.
+  void gmi(const Register& xd, const Register& xn, const Register& xm);
+
+  // Insert Random Tag.
+  void irg(const Register& xd, const Register& xn, const Register& xm = xzr);
+
+  // Load Allocation Tag.
+  void ldg(const Register& xt, const MemOperand& addr);
+
+  void StoreTagHelper(const Register& xt, const MemOperand& addr, Instr op);
+
+  // Store Allocation Tags.
+  void st2g(const Register& xt, const MemOperand& addr);
+
+  // Store Allocation Tag.
+  void stg(const Register& xt, const MemOperand& addr);
+
+  // Store Allocation Tag and Pair of registers.
+  void stgp(const Register& xt1, const Register& xt2, const MemOperand& addr);
+
+  // Store Allocation Tags, Zeroing.
+  void stz2g(const Register& xt, const MemOperand& addr);
+
+  // Store Allocation Tag, Zeroing.
+  void stzg(const Register& xt, const MemOperand& addr);
+
+  // Subtract with Tag.
+  void subg(const Register& xd, const Register& xn, int offset, int tag_offset);
+
+  // Subtract Pointer.
+  void subp(const Register& xd, const Register& xn, const Register& xm);
+
+  // Subtract Pointer, setting Flags.
+  void subps(const Register& xd, const Register& xn, const Register& xm);
+
+  // Compare with Tag.
+  void cmpp(const Register& xn, const Register& xm) { subps(xzr, xn, xm); }
+
+  // Memory Copy.
+  void cpye(const Register& rd, const Register& rs, const Register& rn);
+
+  // Memory Copy, reads and writes non-temporal.
+  void cpyen(const Register& rd, const Register& rs, const Register& rn);
+
+  // Memory Copy, reads non-temporal.
+  void cpyern(const Register& rd, const Register& rs, const Register& rn);
+
+  // Memory Copy, writes non-temporal.
+  void cpyewn(const Register& rd, const Register& rs, const Register& rn);
+
+  // Memory Copy Forward-only.
+  void cpyfe(const Register& rd, const Register& rs, const Register& rn);
+
+  // Memory Copy Forward-only, reads and writes non-temporal.
+  void cpyfen(const Register& rd, const Register& rs, const Register& rn);
+
+  // Memory Copy Forward-only, reads non-temporal.
+  void cpyfern(const Register& rd, const Register& rs, const Register& rn);
+
+  // Memory Copy Forward-only, writes non-temporal.
+  void cpyfewn(const Register& rd, const Register& rs, const Register& rn);
+
+  // Memory Copy Forward-only.
+  void cpyfm(const Register& rd, const Register& rs, const Register& rn);
+
+  // Memory Copy Forward-only, reads and writes non-temporal.
+  void cpyfmn(const Register& rd, const Register& rs, const Register& rn);
+
+  // Memory Copy Forward-only, reads non-temporal.
+  void cpyfmrn(const Register& rd, const Register& rs, const Register& rn);
+
+  // Memory Copy Forward-only, writes non-temporal.
+  void cpyfmwn(const Register& rd, const Register& rs, const Register& rn);
+
+  // Memory Copy Forward-only.
+  void cpyfp(const Register& rd, const Register& rs, const Register& rn);
+
+  // Memory Copy Forward-only, reads and writes non-temporal.
+  void cpyfpn(const Register& rd, const Register& rs, const Register& rn);
+
+  // Memory Copy Forward-only, reads non-temporal.
+  void cpyfprn(const Register& rd, const Register& rs, const Register& rn);
+
+  // Memory Copy Forward-only, writes non-temporal.
+  void cpyfpwn(const Register& rd, const Register& rs, const Register& rn);
+
+  // Memory Copy.
+  void cpym(const Register& rd, const Register& rs, const Register& rn);
+
+  // Memory Copy, reads and writes non-temporal.
+  void cpymn(const Register& rd, const Register& rs, const Register& rn);
+
+  // Memory Copy, reads non-temporal.
+  void cpymrn(const Register& rd, const Register& rs, const Register& rn);
+
+  // Memory Copy, writes non-temporal.
+  void cpymwn(const Register& rd, const Register& rs, const Register& rn);
+
+  // Memory Copy.
+  void cpyp(const Register& rd, const Register& rs, const Register& rn);
+
+  // Memory Copy, reads and writes non-temporal.
+  void cpypn(const Register& rd, const Register& rs, const Register& rn);
+
+  // Memory Copy, reads non-temporal.
+  void cpyprn(const Register& rd, const Register& rs, const Register& rn);
+
+  // Memory Copy, writes non-temporal.
+  void cpypwn(const Register& rd, const Register& rs, const Register& rn);
+
+  // Memory Set.
+  void sete(const Register& rd, const Register& rn, const Register& rs);
+
+  // Memory Set, non-temporal.
+  void seten(const Register& rd, const Register& rn, const Register& rs);
+
+  // Memory Set with tag setting.
+  void setge(const Register& rd, const Register& rn, const Register& rs);
+
+  // Memory Set with tag setting, non-temporal.
+  void setgen(const Register& rd, const Register& rn, const Register& rs);
+
+  // Memory Set with tag setting.
+  void setgm(const Register& rd, const Register& rn, const Register& rs);
+
+  // Memory Set with tag setting, non-temporal.
+  void setgmn(const Register& rd, const Register& rn, const Register& rs);
+
+  // Memory Set with tag setting.
+  void setgp(const Register& rd, const Register& rn, const Register& rs);
+
+  // Memory Set with tag setting, non-temporal.
+  void setgpn(const Register& rd, const Register& rn, const Register& rs);
+
+  // Memory Set.
+  void setm(const Register& rd, const Register& rn, const Register& rs);
+
+  // Memory Set, non-temporal.
+  void setmn(const Register& rd, const Register& rn, const Register& rs);
+
+  // Memory Set.
+  void setp(const Register& rd, const Register& rn, const Register& rs);
+
+  // Memory Set, non-temporal.
+  void setpn(const Register& rd, const Register& rn, const Register& rs);
+
+  // Absolute value.
+  void abs(const Register& rd, const Register& rn);
+
+  // Count bits.
+  void cnt(const Register& rd, const Register& rn);
+
+  // Count Trailing Zeros.
+  void ctz(const Register& rd, const Register& rn);
+
+  // Signed Maximum.
+  void smax(const Register& rd, const Register& rn, const Operand& op);
+
+  // Signed Minimum.
+  void smin(const Register& rd, const Register& rn, const Operand& op);
+
+  // Unsigned Maximum.
+  void umax(const Register& rd, const Register& rn, const Operand& op);
+
+  // Unsigned Minimum.
+  void umin(const Register& rd, const Register& rn, const Operand& op);
+
+  // Check feature status.
+  void chkfeat(const Register& rd);
+
+  // Guarded Control Stack Push.
+  void gcspushm(const Register& rt);
+
+  // Guarded Control Stack Pop.
+  void gcspopm(const Register& rt);
+
+  // Guarded Control Stack Switch Stack 1.
+  void gcsss1(const Register& rt);
+
+  // Guarded Control Stack Switch Stack 2.
+  void gcsss2(const Register& rt);
+
   // Emit generic instructions.
 
   // Emit raw instructions into the instruction stream.
@@ -7219,8 +7525,9 @@ class Assembler : public vixl::internal::AssemblerBase {
   }
 
   static Instr ImmLSPair(int64_t imm7, unsigned access_size_in_bytes_log2) {
-    VIXL_ASSERT(IsMultiple(imm7, 1 << access_size_in_bytes_log2));
-    int64_t scaled_imm7 = imm7 / (1 << access_size_in_bytes_log2);
+    const auto access_size_in_bytes = 1U << access_size_in_bytes_log2;
+    VIXL_ASSERT(IsMultiple(imm7, access_size_in_bytes));
+    int64_t scaled_imm7 = imm7 / access_size_in_bytes;
     VIXL_ASSERT(IsInt7(scaled_imm7));
     return TruncateToUint7(scaled_imm7) << ImmLSPair_offset;
   }
@@ -7345,8 +7652,14 @@ class Assembler : public vixl::internal::AssemblerBase {
   static bool IsImmAddSub(int64_t immediate);
   static bool IsImmConditionalCompare(int64_t immediate);
   static bool IsImmFP16(Float16 imm);
-  static bool IsImmFP32(float imm);
-  static bool IsImmFP64(double imm);
+
+  static bool IsImmFP32(float imm) { return IsImmFP32(FloatToRawbits(imm)); }
+
+  static bool IsImmFP32(uint32_t bits);
+
+  static bool IsImmFP64(double imm) { return IsImmFP64(DoubleToRawbits(imm)); }
+
+  static bool IsImmFP64(uint64_t bits);
   static bool IsImmLogical(uint64_t value,
                            unsigned width,
                            unsigned* n = NULL,
@@ -7362,6 +7675,8 @@ class Assembler : public vixl::internal::AssemblerBase {
   static Instr VFormat(VRegister vd) {
     if (vd.Is64Bits()) {
       switch (vd.GetLanes()) {
+        case 1:
+          return NEON_1D;
         case 2:
           return NEON_2S;
         case 4:

@@ -24,11 +24,12 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include "test-utils-aarch64.h"
+
 #include <cmath>
 #include <queue>
 
 #include "test-runner.h"
-#include "test-utils-aarch64.h"
 
 #include "../test/aarch64/test-simulator-inputs-aarch64.h"
 #include "aarch64/cpu-aarch64.h"
@@ -85,6 +86,34 @@ bool Equal64(uint64_t reference,
   }
 
   return reference == result;
+}
+
+
+bool Equal64(std::vector<uint64_t> reference_list,
+             const RegisterDump*,
+             uint64_t result,
+             ExpectedResult option) {
+  switch (option) {
+    case kExpectEqual:
+      for (uint64_t reference : reference_list) {
+        if (result == reference) return true;
+      }
+      printf("Expected a result in (\n");
+      break;
+    case kExpectNotEqual:
+      for (uint64_t reference : reference_list) {
+        if (result == reference) {
+          printf("Expected a result not in (\n");
+          break;
+        }
+      }
+      return true;
+  }
+  for (uint64_t reference : reference_list) {
+    printf("  0x%016" PRIx64 ",\n", reference);
+  }
+  printf(")\t Found 0x%016" PRIx64 "\n", result);
+  return false;
 }
 
 
@@ -196,6 +225,16 @@ bool Equal64(uint64_t reference,
   VIXL_ASSERT(reg.Is64Bits());
   uint64_t result = core->xreg(reg.GetCode());
   return Equal64(reference, core, result, option);
+}
+
+
+bool Equal64(std::vector<uint64_t> reference_list,
+             const RegisterDump* core,
+             const Register& reg,
+             ExpectedResult option) {
+  VIXL_ASSERT(reg.Is64Bits());
+  uint64_t result = core->xreg(reg.GetCode());
+  return Equal64(reference_list, core, result, option);
 }
 
 
@@ -780,7 +819,7 @@ bool CanRun(const CPUFeatures& required, bool* queried_can_run) {
 }
 
 // Note that the function assumes p0, p1, p2 and p3 are set to all true in b-,
-// h-, s- and d-lane sizes respectively, and p4, p5 are clobberred as a temp
+// h-, s- and d-lane sizes respectively, and p4, p5 are clobbered as a temp
 // predicate.
 template <typename T, size_t N>
 void SetFpData(MacroAssembler* masm,
