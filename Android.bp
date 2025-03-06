@@ -190,6 +190,15 @@ art_cc_library {
         },
     },
 
+    // Mitigate Clang compile hang (b/395613374)
+    arch: {
+        arm: {
+            lto: {
+                never: true,
+            },
+        },
+    },
+
     apex_available: [
         "com.android.art",
         "com.android.art.debug",
