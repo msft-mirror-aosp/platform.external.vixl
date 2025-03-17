@@ -25,9 +25,10 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
+#include "assembler-aarch64.h"
+
 #include <cmath>
 
-#include "assembler-aarch64.h"
 #include "macro-assembler-aarch64.h"
 
 namespace vixl {
@@ -1917,6 +1918,12 @@ void Assembler::sys(int op, const Register& xt) {
 }
 
 
+void Assembler::sysl(int op, const Register& xt) {
+  VIXL_ASSERT(xt.Is64Bits());
+  Emit(SYSL | SysOp(op) | Rt(xt));
+}
+
+
 void Assembler::dc(DataCacheOp op, const Register& rt) {
   if (op == CVAP) VIXL_ASSERT(CPUHas(CPUFeatures::kDCPoP));
   if (op == CVADP) VIXL_ASSERT(CPUHas(CPUFeatures::kDCCVADP));
@@ -1929,6 +1936,35 @@ void Assembler::ic(InstructionCacheOp op, const Register& rt) {
   sys(op, rt);
 }
 
+void Assembler::gcspushm(const Register& rt) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kGCS));
+  sys(GCSPUSHM, rt);
+}
+
+void Assembler::gcspopm(const Register& rt) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kGCS));
+  sysl(GCSPOPM, rt);
+}
+
+
+void Assembler::gcsss1(const Register& rt) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kGCS));
+  sys(GCSSS1, rt);
+}
+
+
+void Assembler::gcsss2(const Register& rt) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kGCS));
+  sysl(GCSSS2, rt);
+}
+
+
+void Assembler::chkfeat(const Register& rd) {
+  VIXL_ASSERT(rd.Is(x16));
+  USE(rd);
+  hint(CHKFEAT);
+}
+
 
 void Assembler::hint(SystemHint code) { hint(static_cast<int>(code)); }
 
@@ -1938,6 +1974,542 @@ void Assembler::hint(int imm7) {
   Emit(HINT | ImmHint(imm7) | Rt(xzr));
 }
 
+
+// MTE.
+
+void Assembler::addg(const Register& xd,
+                     const Register& xn,
+                     int offset,
+                     int tag_offset) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMTE));
+  VIXL_ASSERT(IsMultiple(offset, kMTETagGranuleInBytes));
+
+  Emit(0x91800000 | RdSP(xd) | RnSP(xn) |
+       ImmUnsignedField<21, 16>(offset / kMTETagGranuleInBytes) |
+       ImmUnsignedField<13, 10>(tag_offset));
+}
+
+void Assembler::gmi(const Register& xd,
+                    const Register& xn,
+                    const Register& xm) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMTE));
+
+  Emit(0x9ac01400 | Rd(xd) | RnSP(xn) | Rm(xm));
+}
+
+void Assembler::irg(const Register& xd,
+                    const Register& xn,
+                    const Register& xm) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMTE));
+
+  Emit(0x9ac01000 | RdSP(xd) | RnSP(xn) | Rm(xm));
+}
+
+void Assembler::ldg(const Register& xt, const MemOperand& addr) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMTE));
+  VIXL_ASSERT(addr.IsImmediateOffset());
+  int offset = static_cast<int>(addr.GetOffset());
+  VIXL_ASSERT(IsMultiple(offset, kMTETagGranuleInBytes));
+
+  Emit(0xd9600000 | Rt(xt) | RnSP(addr.GetBaseRegister()) |
+       ImmField<20, 12>(offset / static_cast<int>(kMTETagGranuleInBytes)));
+}
+
+void Assembler::StoreTagHelper(const Register& xt,
+                               const MemOperand& addr,
+                               Instr op) {
+  int offset = static_cast<int>(addr.GetOffset());
+  VIXL_ASSERT(IsMultiple(offset, kMTETagGranuleInBytes));
+
+  Instr addr_mode;
+  if (addr.IsImmediateOffset()) {
+    addr_mode = 2;
+  } else if (addr.IsImmediatePreIndex()) {
+    addr_mode = 3;
+  } else {
+    VIXL_ASSERT(addr.IsImmediatePostIndex());
+    addr_mode = 1;
+  }
+
+  Emit(op | RdSP(xt) | RnSP(addr.GetBaseRegister()) | (addr_mode << 10) |
+       ImmField<20, 12>(offset / static_cast<int>(kMTETagGranuleInBytes)));
+}
+
+void Assembler::st2g(const Register& xt, const MemOperand& addr) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMTE));
+  StoreTagHelper(xt, addr, 0xd9a00000);
+}
+
+void Assembler::stg(const Register& xt, const MemOperand& addr) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMTE));
+  StoreTagHelper(xt, addr, 0xd9200000);
+}
+
+void Assembler::stgp(const Register& xt1,
+                     const Register& xt2,
+                     const MemOperand& addr) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMTE));
+  int offset = static_cast<int>(addr.GetOffset());
+  VIXL_ASSERT(IsMultiple(offset, kMTETagGranuleInBytes));
+
+  Instr addr_mode;
+  if (addr.IsImmediateOffset()) {
+    addr_mode = 2;
+  } else if (addr.IsImmediatePreIndex()) {
+    addr_mode = 3;
+  } else {
+    VIXL_ASSERT(addr.IsImmediatePostIndex());
+    addr_mode = 1;
+  }
+
+  Emit(0x68000000 | RnSP(addr.GetBaseRegister()) | (addr_mode << 23) |
+       ImmField<21, 15>(offset / static_cast<int>(kMTETagGranuleInBytes)) |
+       Rt2(xt2) | Rt(xt1));
+}
+
+void Assembler::stz2g(const Register& xt, const MemOperand& addr) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMTE));
+  StoreTagHelper(xt, addr, 0xd9e00000);
+}
+
+void Assembler::stzg(const Register& xt, const MemOperand& addr) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMTE));
+  StoreTagHelper(xt, addr, 0xd9600000);
+}
+
+void Assembler::subg(const Register& xd,
+                     const Register& xn,
+                     int offset,
+                     int tag_offset) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMTE));
+  VIXL_ASSERT(IsMultiple(offset, kMTETagGranuleInBytes));
+
+  Emit(0xd1800000 | RdSP(xd) | RnSP(xn) |
+       ImmUnsignedField<21, 16>(offset / kMTETagGranuleInBytes) |
+       ImmUnsignedField<13, 10>(tag_offset));
+}
+
+void Assembler::subp(const Register& xd,
+                     const Register& xn,
+                     const Register& xm) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMTE));
+
+  Emit(0x9ac00000 | Rd(xd) | RnSP(xn) | RmSP(xm));
+}
+
+void Assembler::subps(const Register& xd,
+                      const Register& xn,
+                      const Register& xm) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMTE));
+
+  Emit(0xbac00000 | Rd(xd) | RnSP(xn) | RmSP(xm));
+}
+
+void Assembler::cpye(const Register& rd,
+                     const Register& rs,
+                     const Register& rn) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMOPS));
+  VIXL_ASSERT(!AreAliased(rd, rn, rs));
+  VIXL_ASSERT(!rd.IsZero() && !rn.IsZero() && !rs.IsZero());
+
+  Emit(0x1d800400 | Rd(rd) | Rn(rn) | Rs(rs));
+}
+
+void Assembler::cpyen(const Register& rd,
+                      const Register& rs,
+                      const Register& rn) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMOPS));
+  VIXL_ASSERT(!AreAliased(rd, rn, rs));
+  VIXL_ASSERT(!rd.IsZero() && !rn.IsZero() && !rs.IsZero());
+
+  Emit(0x1d80c400 | Rd(rd) | Rn(rn) | Rs(rs));
+}
+
+void Assembler::cpyern(const Register& rd,
+                       const Register& rs,
+                       const Register& rn) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMOPS));
+  VIXL_ASSERT(!AreAliased(rd, rn, rs));
+  VIXL_ASSERT(!rd.IsZero() && !rn.IsZero() && !rs.IsZero());
+
+  Emit(0x1d808400 | Rd(rd) | Rn(rn) | Rs(rs));
+}
+
+void Assembler::cpyewn(const Register& rd,
+                       const Register& rs,
+                       const Register& rn) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMOPS));
+  VIXL_ASSERT(!AreAliased(rd, rn, rs));
+  VIXL_ASSERT(!rd.IsZero() && !rn.IsZero() && !rs.IsZero());
+
+  Emit(0x1d804400 | Rd(rd) | Rn(rn) | Rs(rs));
+}
+
+void Assembler::cpyfe(const Register& rd,
+                      const Register& rs,
+                      const Register& rn) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMOPS));
+  VIXL_ASSERT(!AreAliased(rd, rn, rs));
+  VIXL_ASSERT(!rd.IsZero() && !rn.IsZero() && !rs.IsZero());
+
+  Emit(0x19800400 | Rd(rd) | Rn(rn) | Rs(rs));
+}
+
+void Assembler::cpyfen(const Register& rd,
+                       const Register& rs,
+                       const Register& rn) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMOPS));
+  VIXL_ASSERT(!AreAliased(rd, rn, rs));
+  VIXL_ASSERT(!rd.IsZero() && !rn.IsZero() && !rs.IsZero());
+
+  Emit(0x1980c400 | Rd(rd) | Rn(rn) | Rs(rs));
+}
+
+void Assembler::cpyfern(const Register& rd,
+                        const Register& rs,
+                        const Register& rn) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMOPS));
+  VIXL_ASSERT(!AreAliased(rd, rn, rs));
+  VIXL_ASSERT(!rd.IsZero() && !rn.IsZero() && !rs.IsZero());
+
+  Emit(0x19808400 | Rd(rd) | Rn(rn) | Rs(rs));
+}
+
+void Assembler::cpyfewn(const Register& rd,
+                        const Register& rs,
+                        const Register& rn) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMOPS));
+  VIXL_ASSERT(!AreAliased(rd, rn, rs));
+  VIXL_ASSERT(!rd.IsZero() && !rn.IsZero() && !rs.IsZero());
+
+  Emit(0x19804400 | Rd(rd) | Rn(rn) | Rs(rs));
+}
+
+void Assembler::cpyfm(const Register& rd,
+                      const Register& rs,
+                      const Register& rn) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMOPS));
+  VIXL_ASSERT(!AreAliased(rd, rn, rs));
+  VIXL_ASSERT(!rd.IsZero() && !rn.IsZero() && !rs.IsZero());
+
+  Emit(0x19400400 | Rd(rd) | Rn(rn) | Rs(rs));
+}
+
+void Assembler::cpyfmn(const Register& rd,
+                       const Register& rs,
+                       const Register& rn) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMOPS));
+  VIXL_ASSERT(!AreAliased(rd, rn, rs));
+  VIXL_ASSERT(!rd.IsZero() && !rn.IsZero() && !rs.IsZero());
+
+  Emit(0x1940c400 | Rd(rd) | Rn(rn) | Rs(rs));
+}
+
+void Assembler::cpyfmrn(const Register& rd,
+                        const Register& rs,
+                        const Register& rn) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMOPS));
+  VIXL_ASSERT(!AreAliased(rd, rn, rs));
+  VIXL_ASSERT(!rd.IsZero() && !rn.IsZero() && !rs.IsZero());
+
+  Emit(0x19408400 | Rd(rd) | Rn(rn) | Rs(rs));
+}
+
+void Assembler::cpyfmwn(const Register& rd,
+                        const Register& rs,
+                        const Register& rn) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMOPS));
+  VIXL_ASSERT(!AreAliased(rd, rn, rs));
+  VIXL_ASSERT(!rd.IsZero() && !rn.IsZero() && !rs.IsZero());
+
+  Emit(0x19404400 | Rd(rd) | Rn(rn) | Rs(rs));
+}
+
+void Assembler::cpyfp(const Register& rd,
+                      const Register& rs,
+                      const Register& rn) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMOPS));
+  VIXL_ASSERT(!AreAliased(rd, rn, rs));
+  VIXL_ASSERT(!rd.IsZero() && !rn.IsZero() && !rs.IsZero());
+
+  Emit(0x19000400 | Rd(rd) | Rn(rn) | Rs(rs));
+}
+
+void Assembler::cpyfpn(const Register& rd,
+                       const Register& rs,
+                       const Register& rn) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMOPS));
+  VIXL_ASSERT(!AreAliased(rd, rn, rs));
+  VIXL_ASSERT(!rd.IsZero() && !rn.IsZero() && !rs.IsZero());
+
+  Emit(0x1900c400 | Rd(rd) | Rn(rn) | Rs(rs));
+}
+
+void Assembler::cpyfprn(const Register& rd,
+                        const Register& rs,
+                        const Register& rn) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMOPS));
+  VIXL_ASSERT(!AreAliased(rd, rn, rs));
+  VIXL_ASSERT(!rd.IsZero() && !rn.IsZero() && !rs.IsZero());
+
+  Emit(0x19008400 | Rd(rd) | Rn(rn) | Rs(rs));
+}
+
+void Assembler::cpyfpwn(const Register& rd,
+                        const Register& rs,
+                        const Register& rn) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMOPS));
+  VIXL_ASSERT(!AreAliased(rd, rn, rs));
+  VIXL_ASSERT(!rd.IsZero() && !rn.IsZero() && !rs.IsZero());
+
+  Emit(0x19004400 | Rd(rd) | Rn(rn) | Rs(rs));
+}
+
+void Assembler::cpym(const Register& rd,
+                     const Register& rs,
+                     const Register& rn) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMOPS));
+  VIXL_ASSERT(!AreAliased(rd, rn, rs));
+  VIXL_ASSERT(!rd.IsZero() && !rn.IsZero() && !rs.IsZero());
+
+  Emit(0x1d400400 | Rd(rd) | Rn(rn) | Rs(rs));
+}
+
+void Assembler::cpymn(const Register& rd,
+                      const Register& rs,
+                      const Register& rn) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMOPS));
+  VIXL_ASSERT(!AreAliased(rd, rn, rs));
+  VIXL_ASSERT(!rd.IsZero() && !rn.IsZero() && !rs.IsZero());
+
+  Emit(0x1d40c400 | Rd(rd) | Rn(rn) | Rs(rs));
+}
+
+void Assembler::cpymrn(const Register& rd,
+                       const Register& rs,
+                       const Register& rn) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMOPS));
+  VIXL_ASSERT(!AreAliased(rd, rn, rs));
+  VIXL_ASSERT(!rd.IsZero() && !rn.IsZero() && !rs.IsZero());
+
+  Emit(0x1d408400 | Rd(rd) | Rn(rn) | Rs(rs));
+}
+
+void Assembler::cpymwn(const Register& rd,
+                       const Register& rs,
+                       const Register& rn) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMOPS));
+  VIXL_ASSERT(!AreAliased(rd, rn, rs));
+  VIXL_ASSERT(!rd.IsZero() && !rn.IsZero() && !rs.IsZero());
+
+  Emit(0x1d404400 | Rd(rd) | Rn(rn) | Rs(rs));
+}
+
+void Assembler::cpyp(const Register& rd,
+                     const Register& rs,
+                     const Register& rn) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMOPS));
+  VIXL_ASSERT(!AreAliased(rd, rn, rs));
+  VIXL_ASSERT(!rd.IsZero() && !rn.IsZero() && !rs.IsZero());
+
+  Emit(0x1d000400 | Rd(rd) | Rn(rn) | Rs(rs));
+}
+
+void Assembler::cpypn(const Register& rd,
+                      const Register& rs,
+                      const Register& rn) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMOPS));
+  VIXL_ASSERT(!AreAliased(rd, rn, rs));
+  VIXL_ASSERT(!rd.IsZero() && !rn.IsZero() && !rs.IsZero());
+
+  Emit(0x1d00c400 | Rd(rd) | Rn(rn) | Rs(rs));
+}
+
+void Assembler::cpyprn(const Register& rd,
+                       const Register& rs,
+                       const Register& rn) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMOPS));
+  VIXL_ASSERT(!AreAliased(rd, rn, rs));
+  VIXL_ASSERT(!rd.IsZero() && !rn.IsZero() && !rs.IsZero());
+
+  Emit(0x1d008400 | Rd(rd) | Rn(rn) | Rs(rs));
+}
+
+void Assembler::cpypwn(const Register& rd,
+                       const Register& rs,
+                       const Register& rn) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMOPS));
+  VIXL_ASSERT(!AreAliased(rd, rn, rs));
+  VIXL_ASSERT(!rd.IsZero() && !rn.IsZero() && !rs.IsZero());
+
+  Emit(0x1d004400 | Rd(rd) | Rn(rn) | Rs(rs));
+}
+
+void Assembler::sete(const Register& rd,
+                     const Register& rn,
+                     const Register& rs) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMOPS));
+  VIXL_ASSERT(!AreAliased(rd, rn, rs));
+  VIXL_ASSERT(!rd.IsZero() && !rn.IsZero());
+
+  Emit(0x19c08400 | Rd(rd) | Rn(rn) | Rs(rs));
+}
+
+void Assembler::seten(const Register& rd,
+                      const Register& rn,
+                      const Register& rs) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMOPS));
+  VIXL_ASSERT(!AreAliased(rd, rn, rs));
+  VIXL_ASSERT(!rd.IsZero() && !rn.IsZero());
+
+  Emit(0x19c0a400 | Rd(rd) | Rn(rn) | Rs(rs));
+}
+
+void Assembler::setge(const Register& rd,
+                      const Register& rn,
+                      const Register& rs) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMOPS));
+  VIXL_ASSERT(!AreAliased(rd, rn, rs));
+  VIXL_ASSERT(!rd.IsZero() && !rn.IsZero());
+
+  Emit(0x1dc08400 | Rd(rd) | Rn(rn) | Rs(rs));
+}
+
+void Assembler::setgen(const Register& rd,
+                       const Register& rn,
+                       const Register& rs) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMOPS));
+  VIXL_ASSERT(!AreAliased(rd, rn, rs));
+  VIXL_ASSERT(!rd.IsZero() && !rn.IsZero());
+
+  Emit(0x1dc0a400 | Rd(rd) | Rn(rn) | Rs(rs));
+}
+
+void Assembler::setgm(const Register& rd,
+                      const Register& rn,
+                      const Register& rs) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMOPS));
+  VIXL_ASSERT(!AreAliased(rd, rn, rs));
+  VIXL_ASSERT(!rd.IsZero() && !rn.IsZero());
+
+  Emit(0x1dc04400 | Rd(rd) | Rn(rn) | Rs(rs));
+}
+
+void Assembler::setgmn(const Register& rd,
+                       const Register& rn,
+                       const Register& rs) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMOPS));
+  VIXL_ASSERT(!AreAliased(rd, rn, rs));
+  VIXL_ASSERT(!rd.IsZero() && !rn.IsZero());
+
+  Emit(0x1dc06400 | Rd(rd) | Rn(rn) | Rs(rs));
+}
+
+void Assembler::setgp(const Register& rd,
+                      const Register& rn,
+                      const Register& rs) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMOPS));
+  VIXL_ASSERT(!AreAliased(rd, rn, rs));
+  VIXL_ASSERT(!rd.IsZero() && !rn.IsZero());
+
+  Emit(0x1dc00400 | Rd(rd) | Rn(rn) | Rs(rs));
+}
+
+void Assembler::setgpn(const Register& rd,
+                       const Register& rn,
+                       const Register& rs) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMOPS));
+  VIXL_ASSERT(!AreAliased(rd, rn, rs));
+  VIXL_ASSERT(!rd.IsZero() && !rn.IsZero());
+
+  Emit(0x1dc02400 | Rd(rd) | Rn(rn) | Rs(rs));
+}
+
+void Assembler::setm(const Register& rd,
+                     const Register& rn,
+                     const Register& rs) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMOPS));
+  VIXL_ASSERT(!AreAliased(rd, rn, rs));
+  VIXL_ASSERT(!rd.IsZero() && !rn.IsZero());
+
+  Emit(0x19c04400 | Rd(rd) | Rn(rn) | Rs(rs));
+}
+
+void Assembler::setmn(const Register& rd,
+                      const Register& rn,
+                      const Register& rs) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMOPS));
+  VIXL_ASSERT(!AreAliased(rd, rn, rs));
+  VIXL_ASSERT(!rd.IsZero() && !rn.IsZero());
+
+  Emit(0x19c06400 | Rd(rd) | Rn(rn) | Rs(rs));
+}
+
+void Assembler::setp(const Register& rd,
+                     const Register& rn,
+                     const Register& rs) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMOPS));
+  VIXL_ASSERT(!AreAliased(rd, rn, rs));
+  VIXL_ASSERT(!rd.IsZero() && !rn.IsZero());
+
+  Emit(0x19c00400 | Rd(rd) | Rn(rn) | Rs(rs));
+}
+
+void Assembler::setpn(const Register& rd,
+                      const Register& rn,
+                      const Register& rs) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kMOPS));
+  VIXL_ASSERT(!AreAliased(rd, rn, rs));
+  VIXL_ASSERT(!rd.IsZero() && !rn.IsZero());
+
+  Emit(0x19c02400 | Rd(rd) | Rn(rn) | Rs(rs));
+}
+
+void Assembler::abs(const Register& rd, const Register& rn) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kCSSC));
+  VIXL_ASSERT(rd.IsSameSizeAndType(rn));
+
+  Emit(0x5ac02000 | SF(rd) | Rd(rd) | Rn(rn));
+}
+
+void Assembler::cnt(const Register& rd, const Register& rn) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kCSSC));
+  VIXL_ASSERT(rd.IsSameSizeAndType(rn));
+
+  Emit(0x5ac01c00 | SF(rd) | Rd(rd) | Rn(rn));
+}
+
+void Assembler::ctz(const Register& rd, const Register& rn) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kCSSC));
+  VIXL_ASSERT(rd.IsSameSizeAndType(rn));
+
+  Emit(0x5ac01800 | SF(rd) | Rd(rd) | Rn(rn));
+}
+
+#define MINMAX(V)                        \
+  V(smax, 0x11c00000, 0x1ac06000, true)  \
+  V(smin, 0x11c80000, 0x1ac06800, true)  \
+  V(umax, 0x11c40000, 0x1ac06400, false) \
+  V(umin, 0x11cc0000, 0x1ac06c00, false)
+
+#define VIXL_DEFINE_ASM_FUNC(FN, IMMOP, REGOP, SIGNED)                     \
+  void Assembler::FN(const Register& rd,                                   \
+                     const Register& rn,                                   \
+                     const Operand& op) {                                  \
+    VIXL_ASSERT(rd.IsSameSizeAndType(rn));                                 \
+    Instr i = SF(rd) | Rd(rd) | Rn(rn);                                    \
+    if (op.IsImmediate()) {                                                \
+      int64_t imm = op.GetImmediate();                                     \
+      i |= SIGNED ? ImmField<17, 10>(imm) : ImmUnsignedField<17, 10>(imm); \
+      Emit(IMMOP | i);                                                     \
+    } else {                                                               \
+      VIXL_ASSERT(op.IsPlainRegister());                                   \
+      VIXL_ASSERT(op.GetRegister().IsSameSizeAndType(rd));                 \
+      Emit(REGOP | i | Rm(op.GetRegister()));                              \
+    }                                                                      \
+  }
+MINMAX(VIXL_DEFINE_ASM_FUNC)
+#undef VIXL_DEFINE_ASM_FUNC
 
 // NEON structure loads and stores.
 Instr Assembler::LoadStoreStructAddrModeField(const MemOperand& addr) {
@@ -2376,6 +2948,25 @@ void Assembler::st1(const VRegister& vt, int lane, const MemOperand& dst) {
   LoadStoreStructSingle(vt, lane, dst, NEONLoadStoreSingleStructStore1);
 }
 
+void Assembler::pmull(const VRegister& vd,
+                      const VRegister& vn,
+                      const VRegister& vm) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kNEON));
+  VIXL_ASSERT(AreSameFormat(vn, vm));
+  VIXL_ASSERT((vn.Is8B() && vd.Is8H()) || (vn.Is1D() && vd.Is1Q()));
+  VIXL_ASSERT(CPUHas(CPUFeatures::kPmull1Q) || vd.Is8H());
+  Emit(VFormat(vn) | NEON_PMULL | Rm(vm) | Rn(vn) | Rd(vd));
+}
+
+void Assembler::pmull2(const VRegister& vd,
+                       const VRegister& vn,
+                       const VRegister& vm) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kNEON));
+  VIXL_ASSERT(AreSameFormat(vn, vm));
+  VIXL_ASSERT((vn.Is16B() && vd.Is8H()) || (vn.Is2D() && vd.Is1Q()));
+  VIXL_ASSERT(CPUHas(CPUFeatures::kPmull1Q) || vd.Is8H());
+  Emit(VFormat(vn) | NEON_PMULL2 | Rm(vm) | Rn(vn) | Rd(vd));
+}
 
 void Assembler::NEON3DifferentL(const VRegister& vd,
                                 const VRegister& vn,
@@ -2423,8 +3014,6 @@ void Assembler::NEON3DifferentHN(const VRegister& vd,
 
 // clang-format off
 #define NEON_3DIFF_LONG_LIST(V) \
-  V(pmull,  NEON_PMULL,  vn.IsVector() && vn.Is8B())                           \
-  V(pmull2, NEON_PMULL2, vn.IsVector() && vn.Is16B())                          \
   V(saddl,  NEON_SADDL,  vn.IsVector() && vn.IsD())                            \
   V(saddl2, NEON_SADDL2, vn.IsVector() && vn.IsQ())                            \
   V(sabal,  NEON_SABAL,  vn.IsVector() && vn.IsD())                            \
@@ -2782,7 +3371,8 @@ void Assembler::fmov(const Register& rd, const VRegister& vn) {
 
 
 void Assembler::fmov(const VRegister& vd, const Register& rn) {
-  VIXL_ASSERT(CPUHas(CPUFeatures::kFP));
+  VIXL_ASSERT(CPUHas(CPUFeatures::kFP) ||
+              (vd.Is1D() && CPUHas(CPUFeatures::kNEON)));
   VIXL_ASSERT(vd.Is1H() || vd.Is1S() || vd.Is1D());
   VIXL_ASSERT((vd.GetSizeInBits() == rn.GetSizeInBits()) || vd.Is1H());
   FPIntegerConvertOp op;
@@ -3798,7 +4388,7 @@ void Assembler::sqrdmlah(const VRegister& vd,
                          const VRegister& vm) {
   VIXL_ASSERT(CPUHas(CPUFeatures::kNEON, CPUFeatures::kRDM));
   VIXL_ASSERT(AreSameFormat(vd, vn, vm));
-  VIXL_ASSERT(vd.IsVector() || !vd.IsQ());
+  VIXL_ASSERT(vd.IsLaneSizeH() || vd.IsLaneSizeS());
 
   Instr format, op = NEON_SQRDMLAH;
   if (vd.IsScalar()) {
@@ -3817,7 +4407,7 @@ void Assembler::sqrdmlsh(const VRegister& vd,
                          const VRegister& vm) {
   VIXL_ASSERT(CPUHas(CPUFeatures::kNEON, CPUFeatures::kRDM));
   VIXL_ASSERT(AreSameFormat(vd, vn, vm));
-  VIXL_ASSERT(vd.IsVector() || !vd.IsQ());
+  VIXL_ASSERT(vd.IsLaneSizeH() || vd.IsLaneSizeS());
 
   Instr format, op = NEON_SQRDMLSH;
   if (vd.IsScalar()) {
@@ -5286,6 +5876,263 @@ void Assembler::ummla(const VRegister& vd, const VRegister& vn, const VRegister&
   Emit(0x6e80a400 | Rd(vd) | Rn(vn) | Rm(vm));
 }
 
+void Assembler::bcax(const VRegister& vd, const VRegister& vn, const VRegister& vm, const VRegister& va) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kNEON));
+  VIXL_ASSERT(CPUHas(CPUFeatures::kSHA3));
+  VIXL_ASSERT(vd.Is16B() && vn.Is16B() && vm.Is16B());
+
+  Emit(0xce200000 | Rd(vd) | Rn(vn) | Rm(vm) | Ra(va));
+}
+
+void Assembler::eor3(const VRegister& vd, const VRegister& vn, const VRegister& vm, const VRegister& va) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kNEON));
+  VIXL_ASSERT(CPUHas(CPUFeatures::kSHA3));
+  VIXL_ASSERT(vd.Is16B() && vn.Is16B() && vm.Is16B() && va.Is16B());
+
+  Emit(0xce000000 | Rd(vd) | Rn(vn) | Rm(vm) | Ra(va));
+}
+
+void Assembler::xar(const VRegister& vd, const VRegister& vn, const VRegister& vm, int rotate) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kNEON));
+  VIXL_ASSERT(CPUHas(CPUFeatures::kSHA3));
+  VIXL_ASSERT(vd.Is2D() && vn.Is2D() && vm.Is2D());
+  VIXL_ASSERT(IsUint6(rotate));
+
+  Emit(0xce800000 | Rd(vd) | Rn(vn) | Rm(vm) | rotate << 10);
+}
+
+void Assembler::rax1(const VRegister& vd, const VRegister& vn, const VRegister& vm) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kNEON));
+  VIXL_ASSERT(CPUHas(CPUFeatures::kSHA3));
+  VIXL_ASSERT(vd.Is2D() && vn.Is2D() && vm.Is2D());
+
+  Emit(0xce608c00 | Rd(vd) | Rn(vn) | Rm(vm));
+}
+
+void Assembler::sha1c(const VRegister& vd, const VRegister& vn, const VRegister& vm) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kNEON));
+  VIXL_ASSERT(CPUHas(CPUFeatures::kSHA1));
+  VIXL_ASSERT(vd.IsQ() && vn.IsS() && vm.Is4S());
+
+  Emit(0x5e000000 | Rd(vd) | Rn(vn) | Rm(vm));
+}
+
+void Assembler::sha1h(const VRegister& sd, const VRegister& sn) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kNEON));
+  VIXL_ASSERT(CPUHas(CPUFeatures::kSHA1));
+  VIXL_ASSERT(sd.IsS() && sn.IsS());
+
+  Emit(0x5e280800 | Rd(sd) | Rn(sn));
+}
+
+void Assembler::sha1m(const VRegister& vd, const VRegister& vn, const VRegister& vm) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kNEON));
+  VIXL_ASSERT(CPUHas(CPUFeatures::kSHA1));
+  VIXL_ASSERT(vd.IsQ() && vn.IsS() && vm.Is4S());
+
+  Emit(0x5e002000 | Rd(vd) | Rn(vn) | Rm(vm));
+}
+
+void Assembler::sha1p(const VRegister& vd, const VRegister& vn, const VRegister& vm) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kNEON));
+  VIXL_ASSERT(CPUHas(CPUFeatures::kSHA1));
+  VIXL_ASSERT(vd.IsQ() && vn.IsS() && vm.Is4S());
+
+  Emit(0x5e001000 | Rd(vd) | Rn(vn) | Rm(vm));
+}
+
+void Assembler::sha1su0(const VRegister& vd, const VRegister& vn, const VRegister& vm) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kNEON));
+  VIXL_ASSERT(CPUHas(CPUFeatures::kSHA1));
+  VIXL_ASSERT(vd.Is4S() && vn.Is4S() && vm.Is4S());
+
+  Emit(0x5e003000 | Rd(vd) | Rn(vn) | Rm(vm));
+}
+
+void Assembler::sha1su1(const VRegister& vd, const VRegister& vn) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kNEON));
+  VIXL_ASSERT(CPUHas(CPUFeatures::kSHA1));
+  VIXL_ASSERT(vd.Is4S() && vn.Is4S());
+
+  Emit(0x5e281800 | Rd(vd) | Rn(vn));
+}
+
+void Assembler::sha256h(const VRegister& vd, const VRegister& vn, const VRegister& vm) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kNEON));
+  VIXL_ASSERT(CPUHas(CPUFeatures::kSHA2));
+  VIXL_ASSERT(vd.IsQ() && vn.IsQ() && vm.Is4S());
+
+  Emit(0x5e004000 | Rd(vd) | Rn(vn) | Rm(vm));
+}
+
+void Assembler::sha256h2(const VRegister& vd, const VRegister& vn, const VRegister& vm) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kNEON));
+  VIXL_ASSERT(CPUHas(CPUFeatures::kSHA2));
+  VIXL_ASSERT(vd.IsQ() && vn.IsQ() && vm.Is4S());
+
+  Emit(0x5e005000 | Rd(vd) | Rn(vn) | Rm(vm));
+}
+
+void Assembler::sha256su0(const VRegister& vd, const VRegister& vn) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kNEON));
+  VIXL_ASSERT(CPUHas(CPUFeatures::kSHA2));
+  VIXL_ASSERT(vd.Is4S() && vn.Is4S());
+
+  Emit(0x5e282800 | Rd(vd) | Rn(vn));
+}
+
+void Assembler::sha256su1(const VRegister& vd, const VRegister& vn, const VRegister& vm) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kNEON));
+  VIXL_ASSERT(CPUHas(CPUFeatures::kSHA2));
+  VIXL_ASSERT(vd.Is4S() && vn.Is4S() && vm.Is4S());
+
+  Emit(0x5e006000 | Rd(vd) | Rn(vn) | Rm(vm));
+}
+
+void Assembler::sha512h(const VRegister& vd, const VRegister& vn, const VRegister& vm) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kNEON));
+  VIXL_ASSERT(CPUHas(CPUFeatures::kSHA512));
+  VIXL_ASSERT(vd.IsQ() && vn.IsQ() && vm.Is2D());
+
+  Emit(0xce608000 | Rd(vd) | Rn(vn) | Rm(vm));
+}
+
+void Assembler::sha512h2(const VRegister& vd, const VRegister& vn, const VRegister& vm) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kNEON));
+  VIXL_ASSERT(CPUHas(CPUFeatures::kSHA512));
+  VIXL_ASSERT(vd.IsQ() && vn.IsQ() && vm.Is2D());
+
+  Emit(0xce608400 | Rd(vd) | Rn(vn) | Rm(vm));
+}
+
+void Assembler::sha512su0(const VRegister& vd, const VRegister& vn) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kNEON));
+  VIXL_ASSERT(CPUHas(CPUFeatures::kSHA512));
+  VIXL_ASSERT(vd.Is2D() && vn.Is2D());
+
+  Emit(0xcec08000 | Rd(vd) | Rn(vn));
+}
+
+void Assembler::sha512su1(const VRegister& vd, const VRegister& vn, const VRegister& vm) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kNEON));
+  VIXL_ASSERT(CPUHas(CPUFeatures::kSHA512));
+  VIXL_ASSERT(vd.Is2D() && vn.Is2D() && vm.Is2D());
+
+  Emit(0xce608800 | Rd(vd) | Rn(vn) | Rm(vm));
+}
+
+void Assembler::aesd(const VRegister& vd, const VRegister& vn) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kNEON));
+  VIXL_ASSERT(CPUHas(CPUFeatures::kAES));
+  VIXL_ASSERT(vd.Is16B() && vn.Is16B());
+
+  Emit(0x4e285800 | Rd(vd) | Rn(vn));
+}
+
+void Assembler::aese(const VRegister& vd, const VRegister& vn) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kNEON));
+  VIXL_ASSERT(CPUHas(CPUFeatures::kAES));
+  VIXL_ASSERT(vd.Is16B() && vn.Is16B());
+
+  Emit(0x4e284800 | Rd(vd) | Rn(vn));
+}
+
+void Assembler::aesimc(const VRegister& vd, const VRegister& vn) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kNEON));
+  VIXL_ASSERT(CPUHas(CPUFeatures::kAES));
+  VIXL_ASSERT(vd.Is16B() && vn.Is16B());
+
+  Emit(0x4e287800 | Rd(vd) | Rn(vn));
+}
+
+void Assembler::aesmc(const VRegister& vd, const VRegister& vn) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kNEON));
+  VIXL_ASSERT(CPUHas(CPUFeatures::kAES));
+  VIXL_ASSERT(vd.Is16B() && vn.Is16B());
+
+  Emit(0x4e286800 | Rd(vd) | Rn(vn));
+}
+
+void Assembler::sm3partw1(const VRegister& vd, const VRegister& vn, const VRegister& vm) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kNEON));
+  VIXL_ASSERT(CPUHas(CPUFeatures::kSM3));
+  VIXL_ASSERT(vd.Is4S() && vn.Is4S() && vm.Is4S());
+
+  Emit(0xce60c000 | Rd(vd) | Rn(vn) | Rm(vm));
+}
+
+void Assembler::sm3partw2(const VRegister& vd, const VRegister& vn, const VRegister& vm) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kNEON));
+  VIXL_ASSERT(CPUHas(CPUFeatures::kSM3));
+  VIXL_ASSERT(vd.Is4S() && vn.Is4S() && vm.Is4S());
+
+  Emit(0xce60c400 | Rd(vd) | Rn(vn) | Rm(vm));
+}
+
+void Assembler::sm3ss1(const VRegister& vd, const VRegister& vn, const VRegister& vm, const VRegister& va) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kNEON));
+  VIXL_ASSERT(CPUHas(CPUFeatures::kSM3));
+  VIXL_ASSERT(vd.Is4S() && vn.Is4S() && vm.Is4S() && va.Is4S());
+
+  Emit(0xce400000 | Rd(vd) | Rn(vn) | Rm(vm) | Ra(va));
+}
+
+void Assembler::sm3tt1a(const VRegister& vd, const VRegister& vn, const VRegister& vm, int index) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kNEON));
+  VIXL_ASSERT(CPUHas(CPUFeatures::kSM3));
+  VIXL_ASSERT(vd.Is4S() && vn.Is4S() && vm.Is4S());
+  VIXL_ASSERT(IsUint2(index));
+
+  Instr i = static_cast<uint32_t>(index) << 12;
+  Emit(0xce408000 | Rd(vd) | Rn(vn) | Rm(vm) | i);
+}
+
+void Assembler::sm3tt1b(const VRegister& vd, const VRegister& vn, const VRegister& vm, int index) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kNEON));
+  VIXL_ASSERT(CPUHas(CPUFeatures::kSM3));
+  VIXL_ASSERT(vd.Is4S() && vn.Is4S() && vm.Is4S());
+  VIXL_ASSERT(IsUint2(index));
+
+  Instr i = static_cast<uint32_t>(index) << 12;
+  Emit(0xce408400 | Rd(vd) | Rn(vn) | Rm(vm) | i);
+}
+
+void Assembler::sm3tt2a(const VRegister& vd, const VRegister& vn, const VRegister& vm, int index) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kNEON));
+  VIXL_ASSERT(CPUHas(CPUFeatures::kSM3));
+  VIXL_ASSERT(vd.Is4S() && vn.Is4S() && vm.Is4S());
+  VIXL_ASSERT(IsUint2(index));
+
+  Instr i = static_cast<uint32_t>(index) << 12;
+  Emit(0xce408800 | Rd(vd) | Rn(vn) | Rm(vm) | i);
+}
+
+void Assembler::sm3tt2b(const VRegister& vd, const VRegister& vn, const VRegister& vm, int index) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kNEON));
+  VIXL_ASSERT(CPUHas(CPUFeatures::kSM3));
+  VIXL_ASSERT(vd.Is4S() && vn.Is4S() && vm.Is4S());
+  VIXL_ASSERT(IsUint2(index));
+
+  Instr i = static_cast<uint32_t>(index) << 12;
+  Emit(0xce408c00 | Rd(vd) | Rn(vn) | Rm(vm) | i);
+}
+
+void Assembler::sm4e(const VRegister& vd, const VRegister& vn) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kNEON));
+  VIXL_ASSERT(CPUHas(CPUFeatures::kSM4));
+  VIXL_ASSERT(vd.Is4S() && vn.Is4S());
+
+  Emit(0xcec08400 | Rd(vd) | Rn(vn));
+}
+
+void Assembler::sm4ekey(const VRegister& vd, const VRegister& vn, const VRegister& vm) {
+  VIXL_ASSERT(CPUHas(CPUFeatures::kNEON));
+  VIXL_ASSERT(CPUHas(CPUFeatures::kSM4));
+  VIXL_ASSERT(vd.Is4S() && vn.Is4S() && vm.Is4S());
+
+  Emit(0xce60c800 | Rd(vd) | Rn(vn) | Rm(vm));
+}
+
 // Note:
 // For all ToImm instructions below, a difference in case
 // for the same letter indicates a negated bit.
@@ -5311,9 +6158,9 @@ Instr Assembler::ImmFP16(Float16 imm) {
 
 
 uint32_t Assembler::FP32ToImm8(float imm) {
-  VIXL_ASSERT(IsImmFP32(imm));
   // bits: aBbb.bbbc.defg.h000.0000.0000.0000.0000
   uint32_t bits = FloatToRawbits(imm);
+  VIXL_ASSERT(IsImmFP32(bits));
   // bit7: a000.0000
   uint32_t bit7 = ((bits >> 31) & 0x1) << 7;
   // bit6: 0b00.0000
@@ -5329,10 +6176,10 @@ Instr Assembler::ImmFP32(float imm) { return FP32ToImm8(imm) << ImmFP_offset; }
 
 
 uint32_t Assembler::FP64ToImm8(double imm) {
-  VIXL_ASSERT(IsImmFP64(imm));
   // bits: aBbb.bbbb.bbcd.efgh.0000.0000.0000.0000
   //       0000.0000.0000.0000.0000.0000.0000.0000
   uint64_t bits = DoubleToRawbits(imm);
+  VIXL_ASSERT(IsImmFP64(bits));
   // bit7: a000.0000
   uint64_t bit7 = ((bits >> 63) & 0x1) << 7;
   // bit6: 0b00.0000
@@ -5886,10 +6733,9 @@ bool Assembler::IsImmFP16(Float16 imm) {
 }
 
 
-bool Assembler::IsImmFP32(float imm) {
+bool Assembler::IsImmFP32(uint32_t bits) {
   // Valid values will have the form:
   // aBbb.bbbc.defg.h000.0000.0000.0000.0000
-  uint32_t bits = FloatToRawbits(imm);
   // bits[19..0] are cleared.
   if ((bits & 0x7ffff) != 0) {
     return false;
@@ -5910,11 +6756,10 @@ bool Assembler::IsImmFP32(float imm) {
 }
 
 
-bool Assembler::IsImmFP64(double imm) {
+bool Assembler::IsImmFP64(uint64_t bits) {
   // Valid values will have the form:
   // aBbb.bbbb.bbcd.efgh.0000.0000.0000.0000
   // 0000.0000.0000.0000.0000.0000.0000.0000
-  uint64_t bits = DoubleToRawbits(imm);
   // bits[47..0] are cleared.
   if ((bits & 0x0000ffffffffffff) != 0) {
     return false;
@@ -5936,16 +6781,18 @@ bool Assembler::IsImmFP64(double imm) {
 
 
 bool Assembler::IsImmLSPair(int64_t offset, unsigned access_size_in_bytes_log2) {
+  const auto access_size_in_bytes = 1U << access_size_in_bytes_log2;
   VIXL_ASSERT(access_size_in_bytes_log2 <= kQRegSizeInBytesLog2);
-  return IsMultiple(offset, 1 << access_size_in_bytes_log2) &&
-         IsInt7(offset / (1 << access_size_in_bytes_log2));
+  return IsMultiple(offset, access_size_in_bytes) &&
+         IsInt7(offset / access_size_in_bytes);
 }
 
 
 bool Assembler::IsImmLSScaled(int64_t offset, unsigned access_size_in_bytes_log2) {
+  const auto access_size_in_bytes = 1U << access_size_in_bytes_log2;
   VIXL_ASSERT(access_size_in_bytes_log2 <= kQRegSizeInBytesLog2);
-  return IsMultiple(offset, 1 << access_size_in_bytes_log2) &&
-         IsUint12(offset / (1 << access_size_in_bytes_log2));
+  return IsMultiple(offset, access_size_in_bytes) &&
+         IsUint12(offset / access_size_in_bytes);
 }
 
 
@@ -6330,6 +7177,7 @@ bool Assembler::CPUHas(SystemRegister sysreg) const {
       return CPUHas(CPUFeatures::kRNG);
     case FPCR:
     case NZCV:
+    case DCZID_EL0:
       break;
   }
   return true;

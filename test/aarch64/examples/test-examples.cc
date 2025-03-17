@@ -29,8 +29,8 @@
 #include "non-const-visitor.h"
 #include "test-runner.h"
 #include "test-utils.h"
-#include "../test-utils-aarch64.h"
 
+#include "../test-utils-aarch64.h"
 #include "aarch64/macro-assembler-aarch64.h"
 #include "aarch64/simulator-aarch64.h"
 #define TEST(name) TEST_(EXAMPLE_##name)
@@ -129,7 +129,7 @@ uint32_t SumArrayC(uint8_t* array, uint32_t size) {
                              masm.GetLabelAddress<uint64_t>(&Func));          \
     simulator.RunFrom(masm.GetLabelAddress<Instruction*>(&test));             \
                                                                               \
-    /* Check that callee-saved regsiters are preserved. */                    \
+    /* Check that callee-saved registers are preserved. */                    \
     VIXL_CHECK(saved_xregs[0] == simulator.ReadXRegister(19));                \
     VIXL_CHECK(saved_xregs[1] == simulator.ReadXRegister(20));                \
     VIXL_CHECK(saved_xregs[2] == simulator.ReadXRegister(21));                \
