@@ -24,12 +24,13 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include "bench-utils.h"
+
 #include <vector>
 
 #include "globals-vixl.h"
-#include "aarch64/macro-assembler-aarch64.h"
 
-#include "bench-utils.h"
+#include "aarch64/macro-assembler-aarch64.h"
 
 using namespace vixl;
 using namespace vixl::aarch64;
@@ -306,7 +307,7 @@ void BenchCodeGenerator::BindPendingLabels(uint64_t bind_mask) {
 
 void BenchCodeGenerator::BindAllPendingLabels() {
   while (!labels_.empty()) {
-    // BindPendingLables generates a branch over each block of bound labels.
+    // BindPendingLabels generates a branch over each block of bound labels.
     // This will be repeated for each call here, but the effect is minimal and
     // (empirically) we rarely accumulate more than 64 pending labels anyway.
     BindPendingLabels(UINT64_MAX);

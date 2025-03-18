@@ -132,6 +132,12 @@ namespace aarch64 {
     SimulationCPUFeaturesScope cpu(&masm, kInfrastructureCPUFeatures);        \
     __ PushCalleeSavedRegisters();                                            \
   }                                                                           \
+  /* The infrastructure code hasn't been covered at the moment, e.g. */       \
+  /* prologue/epilogue. Suppress tagging mis-match exception before  */       \
+  /* this point. */                                                           \
+  if (masm.GetCPUFeatures()->Has(CPUFeatures::kMTE)) {                        \
+    __ Hlt(DebugHltOpcode::kMTEActive);                                       \
+  }                                                                           \
   {                                                                           \
     int trace_parameters = 0;                                                 \
     if (Test::trace_reg()) trace_parameters |= LOG_STATE;                     \
@@ -151,6 +157,9 @@ namespace aarch64 {
   /* Avoid unused-variable warnings in case a test never calls RUN(). */ \
   USE(offset_before_infrastructure_end);                                 \
   __ Trace(LOG_ALL, TRACE_DISABLE);                                      \
+  if (masm.GetCPUFeatures()->Has(CPUFeatures::kMTE)) {                   \
+    __ Hlt(DebugHltOpcode::kMTEInactive);                                \
+  }                                                                      \
   {                                                                      \
     SimulationCPUFeaturesScope cpu(&masm, kInfrastructureCPUFeatures);   \
     core.Dump(&masm);                                                    \
@@ -163,7 +172,7 @@ namespace aarch64 {
   RUN_WITHOUT_SEEN_FEATURE_CHECK();                                            \
   {                                                                            \
     /* We expect the test to use all of the features it requested, plus the */ \
-    /* features that the instructure code requires.                         */ \
+    /* features that the instruction code requires.                         */ \
     CPUFeatures const& expected_features =                                     \
         simulator.GetCPUFeatures()->With(CPUFeatures::kNEON);                  \
     CPUFeatures const& seen = simulator.GetSeenFeatures();                     \

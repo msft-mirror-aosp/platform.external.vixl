@@ -27,8 +27,8 @@
 #ifndef VIXL_GLOBALS_H
 #define VIXL_GLOBALS_H
 
-#if __cplusplus < 201402L
-#error VIXL requires C++14
+#if __cplusplus < 201703L
+#error VIXL requires C++17
 #endif
 
 // Get standard C99 macros for integer types.
@@ -158,7 +158,7 @@ struct Unsigned<64> {
 #endif
 // This is not as powerful as template based assertions, but it is simple.
 // It assumes that the descriptions are unique. If this starts being a problem,
-// we can switch to a different implemention.
+// we can switch to a different implementation.
 #define VIXL_CONCAT(a, b) a##b
 #if __cplusplus >= 201103L
 #define VIXL_STATIC_ASSERT_LINE(line_unused, condition, message) \
@@ -207,13 +207,25 @@ inline void USE(const T1&, const T2&, const T3&, const T4&) {}
 #if __has_warning("-Wimplicit-fallthrough") && __cplusplus >= 201103L
 #define VIXL_FALLTHROUGH() [[clang::fallthrough]]
 // Fallthrough annotation for GCC >= 7.
-#elif __GNUC__ >= 7
+#elif defined(__GNUC__) && __GNUC__ >= 7
 #define VIXL_FALLTHROUGH() __attribute__((fallthrough))
 #else
 #define VIXL_FALLTHROUGH() \
   do {                     \
   } while (0)
 #endif
+
+// Evaluate 'init' to an std::optional and return if it's empty. If 'init' is
+// not empty then define a variable 'name' with the value inside the
+// std::optional.
+#define VIXL_DEFINE_OR_RETURN(name, init) \
+  auto opt##name = init;                  \
+  if (!opt##name) return;                 \
+  auto name = *opt##name;
+#define VIXL_DEFINE_OR_RETURN_FALSE(name, init) \
+  auto opt##name = init;                        \
+  if (!opt##name) return false;                 \
+  auto name = *opt##name;
 
 #if __cplusplus >= 201103L
 #define VIXL_NO_RETURN [[noreturn]]

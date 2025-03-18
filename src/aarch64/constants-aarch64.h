@@ -389,7 +389,8 @@ enum SystemHint {
   BTI    = 32,
   BTI_c  = 34,
   BTI_j  = 36,
-  BTI_jc = 38
+  BTI_jc = 38,
+  CHKFEAT = 40
 };
 
 enum BranchTargetIdentifier {
@@ -500,7 +501,8 @@ enum SystemRegister {
   NZCV = SystemRegisterEncoder<3, 3, 4, 2, 0>::value,
   FPCR = SystemRegisterEncoder<3, 3, 4, 4, 0>::value,
   RNDR = SystemRegisterEncoder<3, 3, 2, 4, 0>::value,    // Random number.
-  RNDRRS = SystemRegisterEncoder<3, 3, 2, 4, 1>::value   // Reseeded random number.
+  RNDRRS = SystemRegisterEncoder<3, 3, 2, 4, 1>::value,  // Reseeded random number.
+  DCZID_EL0 = SystemRegisterEncoder<3, 3, 0, 0, 7>::value
 };
 
 template<int op1, int crn, int crm, int op2>
@@ -523,7 +525,22 @@ enum DataCacheOp {
   CVAP = CacheOpEncoder<3, 7, 12, 1>::value,
   CVADP = CacheOpEncoder<3, 7, 13, 1>::value,
   CIVAC = CacheOpEncoder<3, 7, 14, 1>::value,
-  ZVA = CacheOpEncoder<3, 7, 4, 1>::value
+  ZVA = CacheOpEncoder<3, 7, 4, 1>::value,
+  GVA = CacheOpEncoder<3, 7, 4, 3>::value,
+  GZVA = CacheOpEncoder<3, 7, 4, 4>::value,
+  CGVAC = CacheOpEncoder<3, 7, 10, 3>::value,
+  CGDVAC = CacheOpEncoder<3, 7, 10, 5>::value,
+  CGVAP = CacheOpEncoder<3, 7, 12, 3>::value,
+  CGDVAP = CacheOpEncoder<3, 7, 12, 5>::value,
+  CIGVAC = CacheOpEncoder<3, 7, 14, 3>::value,
+  CIGDVAC = CacheOpEncoder<3, 7, 14, 5>::value
+};
+
+enum GCSOp {
+  GCSPUSHM = CacheOpEncoder<3, 7, 7, 0>::value,
+  GCSPOPM = CacheOpEncoder<3, 7, 7, 1>::value,
+  GCSSS1 = CacheOpEncoder<3, 7, 7, 2>::value,
+  GCSSS2 = CacheOpEncoder<3, 7, 7, 3>::value
 };
 
 // Some SVE instructions support a predicate constraint pattern. This is
@@ -934,7 +951,8 @@ enum SystemSysOp {
   SystemSysFixed  = 0xD5080000,
   SystemSysFMask  = 0xFFF80000,
   SystemSysMask   = 0xFFF80000,
-  SYS             = SystemSysFixed | 0x00000000
+  SYS             = SystemSysFixed | 0x00000000,
+  SYSL            = SystemSysFixed | 0x00200000
 };
 
 // Exception.

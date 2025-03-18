@@ -1,4 +1,3 @@
-// Copyright 2015, VIXL authors
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -27,9 +26,8 @@
 #ifndef VIXL_INVALSET_H_
 #define VIXL_INVALSET_H_
 
-#include <cstring>
-
 #include <algorithm>
+#include <cstring>
 #include <vector>
 
 #include "globals-vixl.h"
@@ -92,6 +90,7 @@ class InvalSet {
  public:
   InvalSet();
   ~InvalSet() VIXL_NEGATIVE_TESTING_ALLOW_EXCEPTION;
+  InvalSet(InvalSet&&);  // movable
 
   static const size_t kNPreallocatedElements = N_PREALLOCATED_ELEMENTS;
   static const KeyType kInvalidKey = INVALID_KEY;
@@ -112,7 +111,7 @@ class InvalSet {
   size_t size() const;
 
   // Returns true if no elements are stored in the set.
-  // Note that this does not mean the the backing storage is empty: it can still
+  // Note that this does not mean the backing storage is empty: it can still
   // contain invalid elements.
   bool empty() const;
 
@@ -244,8 +243,13 @@ class InvalSet {
 
 
 template <class S>
-class InvalSetIterator : public std::iterator<std::forward_iterator_tag,
-                                              typename S::_ElementType> {
+class InvalSetIterator {
+  using iterator_category = std::forward_iterator_tag;
+  using value_type = typename S::_ElementType;
+  using difference_type = std::ptrdiff_t;
+  using pointer = S*;
+  using reference = S&;
+
  private:
   // Redefine types to mirror the associated set types.
   typedef typename S::_ElementType ElementType;
@@ -321,6 +325,27 @@ InvalSet<TEMPLATE_INVALSET_P_DEF>::InvalSet()
 #endif
 }
 
+template <TEMPLATE_INVALSET_P_DECL>
+InvalSet<TEMPLATE_INVALSET_P_DEF>::InvalSet(InvalSet&& other)
+    : valid_cached_min_(false), sorted_(true), size_(0), vector_(NULL) {
+  VIXL_ASSERT(other.monitor() == 0);
+  if (this != &other) {
+    sorted_ = other.sorted_;
+    size_ = other.size_;
+#ifdef VIXL_DEBUG
+    monitor_ = 0;
+#endif
+    if (other.IsUsingVector()) {
+      vector_ = other.vector_;
+      other.vector_ = NULL;
+    } else {
+      std::move(other.preallocated_,
+                other.preallocated_ + other.size_,
+                preallocated_);
+    }
+    other.clear();
+  }
+}
 
 template <TEMPLATE_INVALSET_P_DECL>
 InvalSet<TEMPLATE_INVALSET_P_DEF>::~InvalSet()

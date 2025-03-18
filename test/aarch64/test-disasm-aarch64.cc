@@ -25,6 +25,8 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
+#include "test-disasm-aarch64.h"
+
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -33,7 +35,6 @@
 
 #include "aarch64/disasm-aarch64.h"
 #include "aarch64/macro-assembler-aarch64.h"
-#include "test-disasm-aarch64.h"
 
 namespace vixl {
 namespace aarch64 {
@@ -237,11 +238,6 @@ TEST(add_immediate) {
   COMPARE(add(wsp, wsp, Operand(42)), "add wsp, wsp, #0x2a (42)");
   COMPARE(cmn(sp, Operand(24)), "cmn sp, #0x18 (24)");
   COMPARE(adds(wzr, wsp, Operand(9)), "cmn wsp, #0x9 (9)");
-
-  // Instructions in the add/sub immediate space, but unallocated due to shift
-  // value out of range.
-  COMPARE(dci(0x11800400), "unallocated (Unallocated)");
-  COMPARE(dci(0x11c00400), "unallocated (Unallocated)");
 
   CLEANUP();
 }
@@ -976,6 +972,69 @@ TEST(branch) {
   CLEANUP();
 }
 
+TEST(mte_load_store) {
+  SETUP();
+
+  COMPARE(ldg(x0, MemOperand(sp)), "ldg x0, [sp]");
+  COMPARE(ldg(x22, MemOperand(x3, 32)), "ldg x22, [x3, #32]");
+  COMPARE(st2g(x3, MemOperand(sp)), "st2g x3, [sp]");
+  COMPARE(st2g(sp, MemOperand(sp, -320)), "st2g sp, [sp, #-320]");
+  COMPARE(st2g(x30, MemOperand(x4, 160, PreIndex)), "st2g x30, [x4, #160]!");
+  COMPARE(st2g(x22, MemOperand(x24, 1600, PostIndex)),
+          "st2g x22, [x24], #1600");
+  COMPARE(stg(x0, MemOperand(x1)), "stg x0, [x1]");
+  COMPARE(stg(x2, MemOperand(x3, 16)), "stg x2, [x3, #16]");
+  COMPARE(stg(sp, MemOperand(x1, -16, PreIndex)), "stg sp, [x1, #-16]!");
+  COMPARE(stg(x4, MemOperand(sp, -256, PostIndex)), "stg x4, [sp], #-256");
+  COMPARE(stgp(x29, x14, MemOperand(sp)), "stgp x29, x14, [sp]");
+  COMPARE(stgp(x3, x4, MemOperand(x3, -1024)), "stgp x3, x4, [x3, #-1024]");
+  COMPARE(stgp(x17, x7, MemOperand(x18, -64, PreIndex)),
+          "stgp x17, x7, [x18, #-64]!");
+  COMPARE(stgp(x5, x21, MemOperand(sp, 1008, PostIndex)),
+          "stgp x5, x21, [sp], #1008");
+  COMPARE(stzg(x20, MemOperand(x1)), "stzg x20, [x1]");
+  COMPARE(stzg(x22, MemOperand(x3, -32)), "stzg x22, [x3, #-32]");
+  COMPARE(stzg(sp, MemOperand(x1, 32, PreIndex)), "stzg sp, [x1, #32]!");
+  COMPARE(stzg(x5, MemOperand(sp, -2560, PostIndex)), "stzg x5, [sp], #-2560");
+  COMPARE(stz2g(x6, MemOperand(x21)), "stz2g x6, [x21]");
+  COMPARE(stz2g(x18, MemOperand(x13, 16)), "stz2g x18, [x13, #16]");
+  COMPARE(stz2g(sp, MemOperand(sp, -384, PreIndex)), "stz2g sp, [sp, #-384]!");
+  COMPARE(stz2g(sp, MemOperand(x7, -256, PostIndex)), "stz2g sp, [x7], #-256");
+
+  COMPARE_MACRO(Ldg(x10, MemOperand(x17)), "ldg x10, [x17]");
+  COMPARE_MACRO(Ldg(x15, MemOperand(sp, -4096)), "ldg x15, [sp, #-4096]");
+  COMPARE_MACRO(St2g(x3, MemOperand(x15)), "st2g x3, [x15]");
+  COMPARE_MACRO(St2g(sp, MemOperand(sp, -1600)), "st2g sp, [sp, #-1600]");
+  COMPARE_MACRO(St2g(x30, MemOperand(x4, 3216, PreIndex)),
+                "st2g x30, [x4, #3216]!");
+  COMPARE_MACRO(St2g(x18, MemOperand(x2, 352, PostIndex)),
+                "st2g x18, [x2], #352");
+  COMPARE_MACRO(Stg(x10, MemOperand(x17)), "stg x10, [x17]");
+  COMPARE_MACRO(Stg(sp, MemOperand(x3, -4096)), "stg sp, [x3, #-4096]");
+  COMPARE_MACRO(Stg(sp, MemOperand(sp, 4080, PreIndex)),
+                "stg sp, [sp, #4080]!");
+  COMPARE_MACRO(Stg(x14, MemOperand(x20, 1024, PostIndex)),
+                "stg x14, [x20], #1024");
+  COMPARE_MACRO(Stgp(x3, x5, MemOperand(x7)), "stgp x3, x5, [x7]");
+  COMPARE_MACRO(Stgp(x8, x4, MemOperand(x2, -496)), "stgp x8, x4, [x2, #-496]");
+  COMPARE_MACRO(Stgp(x27, x7, MemOperand(sp, -672, PreIndex)),
+                "stgp x27, x7, [sp, #-672]!");
+  COMPARE_MACRO(Stgp(x14, x16, MemOperand(x0, 576, PostIndex)),
+                "stgp x14, x16, [x0], #576");
+  COMPARE_MACRO(Stz2g(x22, MemOperand(x12)), "stz2g x22, [x12]");
+  COMPARE_MACRO(Stz2g(sp, MemOperand(sp, -704)), "stz2g sp, [sp, #-704]");
+  COMPARE_MACRO(Stz2g(x3, MemOperand(x4, 272, PreIndex)),
+                "stz2g x3, [x4, #272]!");
+  COMPARE_MACRO(Stz2g(sp, MemOperand(sp, 1024, PostIndex)),
+                "stz2g sp, [sp], #1024");
+  COMPARE_MACRO(Stzg(x17, MemOperand(x11)), "stzg x17, [x11]");
+  COMPARE_MACRO(Stzg(x29, MemOperand(x3, -3552)), "stzg x29, [x3, #-3552]");
+  COMPARE_MACRO(Stzg(x2, MemOperand(x15, 784, PreIndex)),
+                "stzg x2, [x15, #784]!");
+  COMPARE_MACRO(Stzg(x8, MemOperand(x3, 1488, PostIndex)),
+                "stzg x8, [x3], #1488");
+  CLEANUP();
+}
 
 TEST(load_store) {
   SETUP();
@@ -1793,8 +1852,8 @@ TEST(load_store_exclusive) {
 TEST(atomic_memory) {
   SETUP();
 
-// These macros generate tests for all the variations of the atomic memory
-// operations, e.g. ldadd, ldadda, ldaddb, staddl, etc.
+  // These macros generate tests for all the variations of the atomic memory
+  // operations, e.g. ldadd, ldadda, ldaddb, staddl, etc.
 
 #define AM_LOAD_X_TESTS(N, MN)                                     \
   COMPARE(ld##N(x0, x1, MemOperand(x2)), "ld" MN " x0, x1, [x2]"); \
@@ -1974,23 +2033,24 @@ TEST(prfm_operations) {
   SETUP();
 
   // Test every encodable prefetch operation.
-  const char* expected[] = {
-      "prfm pldl1keep, ", "prfm pldl1strm, ", "prfm pldl2keep, ",
-      "prfm pldl2strm, ", "prfm pldl3keep, ", "prfm pldl3strm, ",
-      "prfm #0b00110, ",  "prfm #0b00111, ",  "prfm plil1keep, ",
-      "prfm plil1strm, ", "prfm plil2keep, ", "prfm plil2strm, ",
-      "prfm plil3keep, ", "prfm plil3strm, ", "prfm #0b01110, ",
-      "prfm #0b01111, ",  "prfm pstl1keep, ", "prfm pstl1strm, ",
-      "prfm pstl2keep, ", "prfm pstl2strm, ", "prfm pstl3keep, ",
-      "prfm pstl3strm, ", "prfm #0b10110, ",  "prfm #0b10111, ",
-      "prfm #0b11000, ",  "prfm #0b11001, ",  "prfm #0b11010, ",
-      "prfm #0b11011, ",  "prfm #0b11100, ",  "prfm #0b11101, ",
-      "prfm #0b11110, ",  "prfm #0b11111, ",
-  };
-  const int expected_count = sizeof(expected) / sizeof(expected[0]);
-  VIXL_STATIC_ASSERT((1 << ImmPrefetchOperation_width) == expected_count);
+  const char* expected[] = {"prfm pldl1keep, ", "prfm pldl1strm, ",
+                            "prfm pldl2keep, ", "prfm pldl2strm, ",
+                            "prfm pldl3keep, ", "prfm pldl3strm, ",
+                            "prfm #0b00110, ",  "prfm #0b00111, ",
+                            "prfm plil1keep, ", "prfm plil1strm, ",
+                            "prfm plil2keep, ", "prfm plil2strm, ",
+                            "prfm plil3keep, ", "prfm plil3strm, ",
+                            "prfm #0b01110, ",  "prfm #0b01111, ",
+                            "prfm pstl1keep, ", "prfm pstl1strm, ",
+                            "prfm pstl2keep, ", "prfm pstl2strm, ",
+                            "prfm pstl3keep, ", "prfm pstl3strm, ",
+                            "prfm #0b10110, ",  "prfm #0b10111, "};
 
   for (int op = 0; op < (1 << ImmPrefetchOperation_width); op++) {
+    // Prefetch operations of the form 0b11xxx are allocated to another
+    // instruction.
+    if (op >= 0b11000) continue;
+
     COMPARE_PREFIX(prfm(op, INT64_C(0)), expected[op]);
     COMPARE_PREFIX(prfm(op, MemOperand(x0, 0)), expected[op]);
     COMPARE_PREFIX(prfm(op, MemOperand(x0, x1)), expected[op]);
@@ -2551,6 +2611,7 @@ TEST(system_mrs) {
   COMPARE(mrs(x15, FPCR), "mrs x15, fpcr");
   COMPARE(mrs(x20, RNDR), "mrs x20, rndr");
   COMPARE(mrs(x5, RNDRRS), "mrs x5, rndrrs");
+  COMPARE(mrs(x9, DCZID_EL0), "mrs x9, dczid_el0");
 
   // Test mrs that use system registers we haven't named.
   COMPARE(dci(MRS | (0x5555 << 5)), "mrs x0, S3_2_c10_c10_5");
@@ -2631,6 +2692,20 @@ TEST(system_dc) {
   CLEANUP();
 }
 
+TEST(system_dc_mte) {
+  SETUP();
+
+  COMPARE(dc(GVA, x0), "dc gva, x0");
+  COMPARE(dc(GZVA, x1), "dc gzva, x1");
+  COMPARE(dc(CGVAC, x2), "dc cgvac, x2");
+  COMPARE(dc(CGDVAC, x3), "dc cgdvac, x3");
+  COMPARE(dc(CGVAP, x3), "dc cgvap, x3");
+  COMPARE(dc(CGDVAP, x3), "dc cgdvap, x3");
+  COMPARE(dc(CIGVAC, x4), "dc cigvac, x4");
+  COMPARE(dc(CIGDVAC, x4), "dc cigdvac, x4");
+
+  CLEANUP();
+}
 
 TEST(system_nop) {
   SETUP();
@@ -3099,18 +3174,218 @@ TEST(udf) {
   CLEANUP();
 }
 
+TEST(mte) {
+  SETUP();
+
+#if 0
+  COMPARE(ldg(x2, x2, int imm9), "ldg <Xt>, [<Xn|SP>{, #<simm>}]");
+  COMPARE(st2g(x3, int imm9), "st2g <Xt|SP>, [<Xn|SP>{, #<simm>}]");
+  COMPARE(st2g(x31, int imm9), "st2g <Xt|SP>, [<Xn|SP>], #<simm>");
+  COMPARE(st2g(x30, int imm9), "st2g <Xt|SP>, [<Xn|SP>, #<simm>]!");
+  COMPARE(stgp(x301, x302, x30, int imm7), "stgp <Xt1>, <Xt2>, [<Xn|SP>{, #<imm>}]");
+  COMPARE(stgp(x201, x202, x20, int imm7), "stgp <Xt1>, <Xt2>, [<Xn|SP>], #<imm>");
+  COMPARE(stgp(x161, x162, x16, int imm7), "stgp <Xt1>, <Xt2>, [<Xn|SP>, #<imm>]!");
+  COMPARE(stg(x9, int imm9), "stg <Xt|SP>, [<Xn|SP>{, #<simm>}]");
+  COMPARE(stg(x20, int imm9), "stg <Xt|SP>, [<Xn|SP>], #<simm>");
+  COMPARE(stg(x29, int imm9), "stg <Xt|SP>, [<Xn|SP>, #<simm>]!");
+  COMPARE(stz2g(x9, int imm9), "stz2g <Xt|SP>, [<Xn|SP>{, #<simm>}]");
+  COMPARE(stz2g(x28, int imm9), "stz2g <Xt|SP>, [<Xn|SP>], #<simm>");
+  COMPARE(stz2g(x7, int imm9), "stz2g <Xt|SP>, [<Xn|SP>, #<simm>]!");
+  COMPARE(stzg(x20, int imm9), "stzg <Xt|SP>, [<Xn|SP>{, #<simm>}]");
+  COMPARE(stzg(x6, int imm9), "stzg <Xt|SP>, [<Xn|SP>], #<simm>");
+  COMPARE(stzg(x28, int imm9), "stzg <Xt|SP>, [<Xn|SP>, #<simm>]!");
+#endif
+
+  CLEANUP();
+}
+
+TEST(mte_dp) {
+  SETUP();
+
+  COMPARE(addg(x26, x27, 0, 0), "addg x26, x27, #0, #0");
+  COMPARE(addg(x26, x27, 512, 2), "addg x26, x27, #512, #2");
+  COMPARE(addg(x26, x27, 1008, 15), "addg x26, x27, #1008, #15");
+  COMPARE(addg(sp, x27, 1008, 15), "addg sp, x27, #1008, #15");
+  COMPARE(addg(x26, sp, 1008, 15), "addg x26, sp, #1008, #15");
+  COMPARE(addg(sp, sp, 1008, 15), "addg sp, sp, #1008, #15");
+  COMPARE(subg(x6, x7, 0, 0), "subg x6, x7, #0, #0");
+  COMPARE(subg(x6, x7, 640, 9), "subg x6, x7, #640, #9");
+  COMPARE(subg(x6, x7, 1008, 15), "subg x6, x7, #1008, #15");
+  COMPARE(subg(sp, x7, 1008, 15), "subg sp, x7, #1008, #15");
+  COMPARE(subg(x6, sp, 1008, 15), "subg x6, sp, #1008, #15");
+  COMPARE(subg(sp, sp, 1008, 15), "subg sp, sp, #1008, #15");
+  COMPARE(gmi(x3, x5, x4), "gmi x3, x5, x4");
+  COMPARE(gmi(x3, sp, x4), "gmi x3, sp, x4");
+  COMPARE(gmi(xzr, sp, xzr), "gmi xzr, sp, xzr");
+  COMPARE(irg(x24, x23, x22), "irg x24, x23, x22");
+  COMPARE(irg(sp, x23, x22), "irg sp, x23, x22");
+  COMPARE(irg(x24, sp, x22), "irg x24, sp, x22");
+  COMPARE(irg(sp, sp, x22), "irg sp, sp, x22");
+  COMPARE(irg(x24, x23, xzr), "irg x24, x23");
+  COMPARE(irg(x24, x23), "irg x24, x23");
+  COMPARE(subp(x28, x29, x30), "subp x28, x29, x30");
+  COMPARE(subp(x28, sp, x30), "subp x28, sp, x30");
+  COMPARE(subp(x28, x29, sp), "subp x28, x29, sp");
+  COMPARE(subp(x28, sp, sp), "subp x28, sp, sp");
+  COMPARE(subp(xzr, sp, sp), "subp xzr, sp, sp");
+  COMPARE(subps(x2, x10, x0), "subps x2, x10, x0");
+  COMPARE(subps(x2, sp, x0), "subps x2, sp, x0");
+  COMPARE(subps(x2, x10, sp), "subps x2, x10, sp");
+  COMPARE(subps(x2, sp, sp), "subps x2, sp, sp");
+  COMPARE(subps(xzr, sp, sp), "cmpp sp, sp");
+  COMPARE(subps(xzr, x2, sp), "cmpp x2, sp");
+  COMPARE(cmpp(x6, x30), "cmpp x6, x30");
+
+  CLEANUP();
+}
+
+TEST(mops) {
+  SETUP();
+
+  COMPARE_MACRO(Cpyen(x4, x5, x6), "cpyen [x4]!, [x5]!, x6!");
+  COMPARE_MACRO(Cpyern(x7, x6, x1), "cpyern [x7]!, [x6]!, x1!");
+  COMPARE_MACRO(Cpyewn(x26, x27, x28), "cpyewn [x26]!, [x27]!, x28!");
+  COMPARE_MACRO(Cpye(x14, x15, x19), "cpye [x14]!, [x15]!, x19!");
+  COMPARE_MACRO(Cpyfen(x13, x1, x9), "cpyfen [x13]!, [x1]!, x9!");
+  COMPARE_MACRO(Cpyfern(x24, x2, x10), "cpyfern [x24]!, [x2]!, x10!");
+  COMPARE_MACRO(Cpyfewn(x12, x2, x11), "cpyfewn [x12]!, [x2]!, x11!");
+  COMPARE_MACRO(Cpyfe(x3, x9, x12), "cpyfe [x3]!, [x9]!, x12!");
+  COMPARE_MACRO(Cpyfmn(x7, x27, x13), "cpyfmn [x7]!, [x27]!, x13!");
+  COMPARE_MACRO(Cpyfmrn(x19, x9, x14), "cpyfmrn [x19]!, [x9]!, x14!");
+  COMPARE_MACRO(Cpyfmwn(x1, x11, x15), "cpyfmwn [x1]!, [x11]!, x15!");
+  COMPARE_MACRO(Cpyfm(x1, x13, x16), "cpyfm [x1]!, [x13]!, x16!");
+  COMPARE_MACRO(Cpyfpn(x3, x13, x17), "cpyfpn [x3]!, [x13]!, x17!");
+  COMPARE_MACRO(Cpyfprn(x18, x8, x17), "cpyfprn [x18]!, [x8]!, x17!");
+  COMPARE_MACRO(Cpyfpwn(x9, x29, x18), "cpyfpwn [x9]!, [x29]!, x18!");
+  COMPARE_MACRO(Cpyfp(x4, x3, x19), "cpyfp [x4]!, [x3]!, x19!");
+  COMPARE_MACRO(Cpymn(x5, x15, x20), "cpymn [x5]!, [x15]!, x20!");
+  COMPARE_MACRO(Cpymrn(x12, x22, x21), "cpymrn [x12]!, [x22]!, x21!");
+  COMPARE_MACRO(Cpymwn(x12, x1, x22), "cpymwn [x12]!, [x1]!, x22!");
+  COMPARE_MACRO(Cpym(x1, x10, x23), "cpym [x1]!, [x10]!, x23!");
+  COMPARE_MACRO(Cpypn(x3, x26, x25), "cpypn [x3]!, [x26]!, x25!");
+  COMPARE_MACRO(Cpyprn(x4, x14, x24), "cpyprn [x4]!, [x14]!, x24!");
+  COMPARE_MACRO(Cpypwn(x9, x29, x26), "cpypwn [x9]!, [x29]!, x26!");
+  COMPARE_MACRO(Cpyp(x0, x30, x28), "cpyp [x0]!, [x30]!, x28!");
+
+  COMPARE_MACRO(Seten(x6, x26, x27), "seten [x6]!, x26!, x27");
+  COMPARE_MACRO(Sete(x3, x23, x1), "sete [x3]!, x23!, x1");
+  COMPARE_MACRO(Setgen(x6, x16, x2), "setgen [x6]!, x16!, x2");
+  COMPARE_MACRO(Setge(x4, x24, x3), "setge [x4]!, x24!, x3");
+  COMPARE_MACRO(Setgmn(x9, x29, x4), "setgmn [x9]!, x29!, x4");
+  COMPARE_MACRO(Setgm(x30, x3, x5), "setgm [x30]!, x3!, x5");
+  COMPARE_MACRO(Setgpn(x11, x1, x6), "setgpn [x11]!, x1!, x6");
+  COMPARE_MACRO(Setgp(x1, x16, x7), "setgp [x1]!, x16!, x7");
+  COMPARE_MACRO(Setmn(x4, x14, x8), "setmn [x4]!, x14!, x8");
+  COMPARE_MACRO(Setm(x8, x7, x9), "setm [x8]!, x7!, x9");
+  COMPARE_MACRO(Setpn(x2, x22, x10), "setpn [x2]!, x22!, x10");
+  COMPARE_MACRO(Setp(x7, x17, x11), "setp [x7]!, x17!, x11");
+
+  // Check unallocated bit patterns.
+  COMPARE_PREFIX(dci(0x1d000422), "cpyp [x2]!, [x0]!, x1!");
+  COMPARE_PREFIX(dci(0xdd000422), "unallocated");  // sz != 0
+  COMPARE_PREFIX(dci(0x1d000442), "unallocated");  // Xd == Xn
+  COMPARE_PREFIX(dci(0x1d020422), "unallocated");  // Xd == Xs
+  COMPARE_PREFIX(dci(0x1d000402), "unallocated");  // Xn == Xs
+  COMPARE_PREFIX(dci(0x1d00043f), "unallocated");  // Xd == 31
+  COMPARE_PREFIX(dci(0x1d0007e2), "unallocated");  // Xn == 31
+  COMPARE_PREFIX(dci(0x1d1f0422), "unallocated");  // Xs == 31
+
+  COMPARE_PREFIX(dci(0x19c02424), "setpn [x4]!, x1!, x0");
+  COMPARE_PREFIX(dci(0xd9c02424), "unallocated");  // sz != 0
+  COMPARE_PREFIX(dci(0x19c0e424), "unallocated");  // op2 == 0xe
+  COMPARE_PREFIX(dci(0x19c02400), "unallocated");  // Xd == Xn
+  COMPARE_PREFIX(dci(0x19c02420), "unallocated");  // Xd == Xs
+  COMPARE_PREFIX(dci(0x19c02404), "unallocated");  // Xn == Xs
+  COMPARE_PREFIX(dci(0x19c0243f), "unallocated");  // Xd == 31
+  COMPARE_PREFIX(dci(0x19c027e4), "unallocated");  // Xn == 31
+
+  CLEANUP();
+}
+
+TEST(cssc) {
+  SETUP();
+
+  COMPARE_MACRO(Abs(w0, w22), "abs w0, w22");
+  COMPARE_MACRO(Abs(x0, x23), "abs x0, x23");
+  COMPARE_MACRO(Abs(wzr, wzr), "abs wzr, wzr");
+  COMPARE_MACRO(Cnt(w21, w30), "cnt w21, w30");
+  COMPARE_MACRO(Cnt(x19, x9), "cnt x19, x9");
+  COMPARE_MACRO(Cnt(xzr, x30), "cnt xzr, x30");
+  COMPARE_MACRO(Ctz(w3, w5), "ctz w3, w5");
+  COMPARE_MACRO(Ctz(x3, x28), "ctz x3, x28");
+  COMPARE_MACRO(Ctz(w0, wzr), "ctz w0, wzr");
+
+  COMPARE_MACRO(Smax(w5, w9, w10), "smax w5, w9, w10");
+  COMPARE_MACRO(Smax(x6, x8, x9), "smax x6, x8, x9");
+  COMPARE_MACRO(Smin(w11, w8, w17), "smin w11, w8, w17");
+  COMPARE_MACRO(Smin(x12, x10, x20), "smin x12, x10, x20");
+  COMPARE_MACRO(Umax(w5, w9, w10), "umax w5, w9, w10");
+  COMPARE_MACRO(Umax(x6, x8, x9), "umax x6, x8, x9");
+  COMPARE_MACRO(Umin(w11, w8, w17), "umin w11, w8, w17");
+  COMPARE_MACRO(Umin(x12, x10, x20), "umin x12, x10, x20");
+
+  COMPARE_MACRO(Smax(w5, w9, 127), "smax w5, w9, #127");
+  COMPARE_MACRO(Smax(x6, x8, -128), "smax x6, x8, #-128");
+  COMPARE_MACRO(Smin(w19, w20, -1), "smin w19, w20, #-1");
+  COMPARE_MACRO(Smin(x30, xzr, 0), "smin x30, xzr, #0");
+  COMPARE_MACRO(Umax(w5, w9, 255), "umax w5, w9, #255");
+  COMPARE_MACRO(Umax(x6, x8, 128), "umax x6, x8, #128");
+  COMPARE_MACRO(Umin(wzr, w20, 1), "umin wzr, w20, #1");
+  COMPARE_MACRO(Umin(x30, xzr, 0), "umin x30, xzr, #0");
+
+  COMPARE_MACRO(Smax(w5, w6, 128),
+                "mov w16, #0x80\n"
+                "smax w5, w6, w16");
+  COMPARE_MACRO(Smax(x10, x11, -129),
+                "mov x16, #0xffffffffffffff7f\n"
+                "smax x10, x11, x16");
+  COMPARE_MACRO(Smin(w5, w6, 128),
+                "mov w16, #0x80\n"
+                "smin w5, w6, w16");
+  COMPARE_MACRO(Smin(x10, x11, -129),
+                "mov x16, #0xffffffffffffff7f\n"
+                "smin x10, x11, x16");
+  COMPARE_MACRO(Umax(w5, w6, 256),
+                "mov w16, #0x100\n"
+                "umax w5, w6, w16");
+  COMPARE_MACRO(Umax(x10, x11, 0x4242),
+                "mov x16, #0x4242\n"
+                "umax x10, x11, x16");
+  COMPARE_MACRO(Umin(w5, w6, 256),
+                "mov w16, #0x100\n"
+                "umin w5, w6, w16");
+  COMPARE_MACRO(Umin(x10, x11, 0x4242),
+                "mov x16, #0x4242\n"
+                "umin x10, x11, x16");
+  CLEANUP();
+}
+
+TEST(gcs) {
+  SETUP();
+
+  COMPARE_MACRO(Chkfeat(x16), "chkfeat x16");
+  COMPARE_MACRO(Gcspopm(x0), "gcspopm x0");
+  COMPARE_MACRO(Gcspopm(), "gcspopm");
+  COMPARE_MACRO(Gcspopm(xzr), "gcspopm");
+  COMPARE_MACRO(Gcsss1(x4), "gcsss1 x4");
+  COMPARE_MACRO(Gcsss2(x2), "gcsss2 x2");
+  COMPARE_MACRO(Gcspushm(x1), "gcspushm x1");
+
+  CLEANUP();
+}
+
 TEST(architecture_features) {
   SETUP();
 
   // ARMv8.1 - LOR
-  COMPARE_PREFIX(dci(0x08800000), "stllrb");  // STLLRB_SL32_ldstexcl
-  COMPARE_PREFIX(dci(0x08c00000), "ldlarb");  // LDLARB_LR32_ldstexcl
-  COMPARE_PREFIX(dci(0x48800000), "stllrh");  // STLLRH_SL32_ldstexcl
-  COMPARE_PREFIX(dci(0x48c00000), "ldlarh");  // LDLARH_LR32_ldstexcl
-  COMPARE_PREFIX(dci(0x88800000), "stllr");   // STLLR_SL32_ldstexcl
-  COMPARE_PREFIX(dci(0x88c00000), "ldlar");   // LDLAR_LR32_ldstexcl
-  COMPARE_PREFIX(dci(0xc8800000), "stllr");   // STLLR_SL64_ldstexcl
-  COMPARE_PREFIX(dci(0xc8c00000), "ldlar");   // LDLAR_LR64_ldstexcl
+  COMPARE_PREFIX(dci(0x089f7c00), "stllrb");  // STLLRB_SL32_ldstexcl
+  COMPARE_PREFIX(dci(0x08df7c00), "ldlarb");  // LDLARB_LR32_ldstexcl
+  COMPARE_PREFIX(dci(0x489f7c00), "stllrh");  // STLLRH_SL32_ldstexcl
+  COMPARE_PREFIX(dci(0x48df7c00), "ldlarh");  // LDLARH_LR32_ldstexcl
+  COMPARE_PREFIX(dci(0x889f7c00), "stllr");   // STLLR_SL32_ldstexcl
+  COMPARE_PREFIX(dci(0x88df7c00), "ldlar");   // LDLAR_LR32_ldstexcl
+  COMPARE_PREFIX(dci(0xc89f7c00), "stllr");   // STLLR_SL64_ldstexcl
+  COMPARE_PREFIX(dci(0xc8df7c00), "ldlar");   // LDLAR_LR64_ldstexcl
 
   // ARMv8.1 - LSE
   COMPARE_PREFIX(dci(0x08207c00), "casp");       // CASP_CP32_ldstexcl
@@ -3283,19 +3558,19 @@ TEST(architecture_features) {
   COMPARE_PREFIX(dci(0xf8e08000), "swpal");      // SWPAL_64_memop
 
   // ARMv8.1 - RDM
-  COMPARE_PREFIX(dci(0x2e008400), "sqrdmlah");  // SQRDMLAH_asimdsame2_only
-  COMPARE_PREFIX(dci(0x2e008c00), "sqrdmlsh");  // SQRDMLSH_asimdsame2_only
+  COMPARE_PREFIX(dci(0x2e808400), "sqrdmlah");  // SQRDMLAH_asimdsame2_only
+  COMPARE_PREFIX(dci(0x2e808c00), "sqrdmlsh");  // SQRDMLSH_asimdsame2_only
   COMPARE_PREFIX(dci(0x2f40d000), "sqrdmlah");  // SQRDMLAH_asimdelem_R
   COMPARE_PREFIX(dci(0x2f40f000), "sqrdmlsh");  // SQRDMLSH_asimdelem_R
-  COMPARE_PREFIX(dci(0x7e008400), "sqrdmlah");  // SQRDMLAH_asisdsame2_only
-  COMPARE_PREFIX(dci(0x7e008c00), "sqrdmlsh");  // SQRDMLSH_asisdsame2_only
+  COMPARE_PREFIX(dci(0x7e408400), "sqrdmlah");  // SQRDMLAH_asisdsame2_only
+  COMPARE_PREFIX(dci(0x7e408c00), "sqrdmlsh");  // SQRDMLSH_asisdsame2_only
   COMPARE_PREFIX(dci(0x7f40d000), "sqrdmlah");  // SQRDMLAH_asisdelem_R
   COMPARE_PREFIX(dci(0x7f40f000), "sqrdmlsh");  // SQRDMLSH_asisdelem_R
 
   // ARMv8.2 - DotProd
-  COMPARE_PREFIX(dci(0x0e009400), "sdot");  // SDOT_asimdsame2_D
+  COMPARE_PREFIX(dci(0x0e809400), "sdot");  // SDOT_asimdsame2_D
   COMPARE_PREFIX(dci(0x0f00e000), "sdot");  // SDOT_asimdelem_D
-  COMPARE_PREFIX(dci(0x2e009400), "udot");  // UDOT_asimdsame2_D
+  COMPARE_PREFIX(dci(0x2e809400), "udot");  // UDOT_asimdsame2_D
   COMPARE_PREFIX(dci(0x2f00e000), "udot");  // UDOT_asimdelem_D
 
   // ARMv8.2 - FHM
@@ -3515,42 +3790,39 @@ TEST(architecture_features) {
   COMPARE_PREFIX(dci(0xd503221f), "esb");  // ESB_HI_hints
 
   // ARMv8.2 - SHA3
-  // COMPARE_PREFIX(dci(0xce000000), "eor3");   // EOR3_VVV16_crypto4
-  // COMPARE_PREFIX(dci(0xce200000), "bcax");   // BCAX_VVV16_crypto4
-  // COMPARE_PREFIX(dci(0xce608c00), "rax1");   // RAX1_VVV2_cryptosha512_3
-  // COMPARE_PREFIX(dci(0xce800000), "xar");   // XAR_VVV2_crypto3_imm6
+  COMPARE_PREFIX(dci(0xce000000), "eor3");  // EOR3_VVV16_crypto4
+  COMPARE_PREFIX(dci(0xce200000), "bcax");  // BCAX_VVV16_crypto4
+  COMPARE_PREFIX(dci(0xce608c00), "rax1");  // RAX1_VVV2_cryptosha512_3
+  COMPARE_PREFIX(dci(0xce800000), "xar");   // XAR_VVV2_crypto3_imm6
 
   // ARMv8.2 - SHA512
-  // COMPARE_PREFIX(dci(0xce608000), "sha512h");   // SHA512H_QQV_cryptosha512_3
-  // COMPARE_PREFIX(dci(0xce608400), "sha512h2");   //
-  // SHA512H2_QQV_cryptosha512_3
-  // COMPARE_PREFIX(dci(0xce608800), "sha512su1");   //
-  // SHA512SU1_VVV2_cryptosha512_3
-  // COMPARE_PREFIX(dci(0xcec08000), "sha512su0");   //
-  // SHA512SU0_VV2_cryptosha512_2
+  COMPARE_PREFIX(dci(0xce608000), "sha512h");   // SHA512H_QQV_cryptosha512_3
+  COMPARE_PREFIX(dci(0xce608400), "sha512h2");  // SHA512H2_QQV_cryptosha512_3
+  COMPARE_PREFIX(dci(0xce608800),
+                 "sha512su1");  // SHA512SU1_VVV2_cryptosha512_3
+  COMPARE_PREFIX(dci(0xcec08000), "sha512su0");  // SHA512SU0_VV2_cryptosha512_2
 
   // ARMv8.2 - SM3
-  // COMPARE_PREFIX(dci(0xce400000), "sm3ss1");   // SM3SS1_VVV4_crypto4
-  // COMPARE_PREFIX(dci(0xce408000), "sm3tt1a");   // SM3TT1A_VVV4_crypto3_imm2
-  // COMPARE_PREFIX(dci(0xce408400), "sm3tt1b");   // SM3TT1B_VVV4_crypto3_imm2
-  // COMPARE_PREFIX(dci(0xce408800), "sm3tt2a");   // SM3TT2A_VVV4_crypto3_imm2
-  // COMPARE_PREFIX(dci(0xce408c00), "sm3tt2b");   // SM3TT2B_VVV_crypto3_imm2
-  // COMPARE_PREFIX(dci(0xce60c000), "sm3partw1");   //
-  // SM3PARTW1_VVV4_cryptosha512_3
-  // COMPARE_PREFIX(dci(0xce60c400), "sm3partw2");   //
-  // SM3PARTW2_VVV4_cryptosha512_3
+  COMPARE_PREFIX(dci(0xce400000), "sm3ss1");   // SM3SS1_VVV4_crypto4
+  COMPARE_PREFIX(dci(0xce408000), "sm3tt1a");  // SM3TT1A_VVV4_crypto3_imm2
+  COMPARE_PREFIX(dci(0xce408400), "sm3tt1b");  // SM3TT1B_VVV4_crypto3_imm2
+  COMPARE_PREFIX(dci(0xce408800), "sm3tt2a");  // SM3TT2A_VVV4_crypto3_imm2
+  COMPARE_PREFIX(dci(0xce408c00), "sm3tt2b");  // SM3TT2B_VVV_crypto3_imm2
+  COMPARE_PREFIX(dci(0xce60c000),
+                 "sm3partw1");  // SM3PARTW1_VVV4_cryptosha512_3
+  COMPARE_PREFIX(dci(0xce60c400),
+                 "sm3partw2");  // SM3PARTW2_VVV4_cryptosha512_3
 
   // ARMv8.2 - SM4
-  // COMPARE_PREFIX(dci(0xce60c800), "sm4ekey");   //
-  // SM4EKEY_VVV4_cryptosha512_3
-  // COMPARE_PREFIX(dci(0xcec08400), "sm4e");   // SM4E_VV4_cryptosha512_2
+  COMPARE_PREFIX(dci(0xce60c800), "sm4ekey");  // SM4EKEY_VVV4_cryptosha512_3
+  COMPARE_PREFIX(dci(0xcec08400), "sm4e");     // SM4E_VV4_cryptosha512_2
 
   // ARMv8.2 - SPE
   // COMPARE_PREFIX(dci(0xd503223f), "psb");   // PSB_HC_hints
 
   // ARMv8.3 - FCMA
   COMPARE_PREFIX(dci(0x2e40c400), "fcmla");  // FCMLA_asimdsame2_C
-  COMPARE_PREFIX(dci(0x2e00e400), "fcadd");  // FCADD_asimdsame2_C
+  COMPARE_PREFIX(dci(0x2e40e400), "fcadd");  // FCADD_asimdsame2_C
   COMPARE_PREFIX(dci(0x2f401000), "fcmla");  // FCMLA_asimdelem_C_H
   COMPARE_PREFIX(dci(0x6f801000), "fcmla");  // FCMLA_asimdelem_C_S
 
@@ -3558,10 +3830,10 @@ TEST(architecture_features) {
   COMPARE_PREFIX(dci(0x1e7e0000), "fjcvtzs");  // FJCVTZS_32D_float2int
 
   // ARMv8.3 - LRCPC
-  COMPARE_PREFIX(dci(0x38a0c000), "ldaprb");  // LDAPRB_32L_memop
-  COMPARE_PREFIX(dci(0x78a0c000), "ldaprh");  // LDAPRH_32L_memop
-  COMPARE_PREFIX(dci(0xb8a0c000), "ldapr");   // LDAPR_32L_memop
-  COMPARE_PREFIX(dci(0xf8a0c000), "ldapr");   // LDAPR_64L_memop
+  COMPARE_PREFIX(dci(0x38bfc000), "ldaprb");  // LDAPRB_32L_memop
+  COMPARE_PREFIX(dci(0x78bfc000), "ldaprh");  // LDAPRH_32L_memop
+  COMPARE_PREFIX(dci(0xb8bfc000), "ldapr");   // LDAPR_32L_memop
+  COMPARE_PREFIX(dci(0xf8bfc000), "ldapr");   // LDAPR_64L_memop
 
   // ARMv8.3 - PAuth
   COMPARE_PREFIX(dci(0x9ac03000), "pacga");      // PACGA_64P_dp_2src
