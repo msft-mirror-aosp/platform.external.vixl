@@ -505,11 +505,11 @@ TEST(macro_assembler_t32_rsc) {
 
   // - Immediate form. We can always re-use `rn`.
 
-  // No need for temporay registers.
+  // No need for temporary registers.
   COMPARE_T32(Rsc(r0, r1, 1),
               "mvn r0, r1\n"
               "adc r0, #1\n");
-  // No need for temporay registers.
+  // No need for temporary registers.
   COMPARE_T32(Rscs(r0, r0, 2),
               "mvn r0, r0\n"
               "adcs r0, #2\n");
@@ -568,7 +568,7 @@ TEST(macro_assembler_t32_rsc) {
 
   // - Shifted register form.
 
-  // No need for temporay registers.
+  // No need for temporary registers.
   COMPARE_T32(Rsc(r0, r1, Operand(r2, LSL, 1)),
               "mvn r0, r1\n"
               "adc r0, r2, lsl #1\n");
@@ -1508,7 +1508,7 @@ TEST(macro_assembler_Orr) {
 TEST(macro_assembler_InstructionCondSizeRROp) {
   SETUP();
 
-  // Special case for Orr <-> Orn correspondance.
+  // Special case for Orr <-> Orn correspondence.
 
   COMPARE_T32(Orr(r0, r1, 0x00ffffff), "orn r0, r1, #0xff000000\n");
   COMPARE_T32(Orrs(r0, r1, 0x00ffffff), "orns r0, r1, #0xff000000\n");
@@ -1699,6 +1699,41 @@ TEST(macro_assembler_Cbz) {
   CLEANUP();
 }
 
+
+TEST(macro_assembler_b_cond_t32) {
+  SETUP();
+
+#ifdef VIXL_INCLUDE_TARGET_T32
+  // Ensure backward conditional branches are veneered correctly.
+  __ UseT32();
+  int pc_off = __ GetArchitectureStatePCOffset();
+
+  // Largest encodable backwards offset.
+  int curs = __ GetCursorOffset() + pc_off;
+  Label label_neg1m(curs - 1048576);
+  COMPARE_T32(B(ne, &label_neg1m), "bne 0xfff00004\n");
+
+  // Next largest cannot be encoded.
+  curs = __ GetCursorOffset() + pc_off;
+  Label label_neg1m_plus_inst(curs - (1048576 + 2));
+  COMPARE_T32(B(ne, &label_neg1m_plus_inst), "beq 0x00000006\n"
+                                             "b 0xfff00002\n");
+
+  // Offset that requires largest unconditional branch in veneer.
+  curs = __ GetCursorOffset() + pc_off;
+  Label label_neg16m(curs - (16777216 - 2));
+  COMPARE_T32(B(ne, &label_neg16m), "beq 0x00000006\n"
+                                    "b 0xff000006\n");
+
+  // Next largest cannot be veneered.
+  curs = __ GetCursorOffset() + pc_off;
+  Label label_neg16m_plus_inst(curs - 16777216);
+  MUST_FAIL_TEST_T32(B(ne, &label_neg16m_plus_inst),
+                     "Conditional branch too far for veneer.\n");
+#endif
+
+  CLEANUP();
+}
 
 #ifdef VIXL_NEGATIVE_TESTING
 TEST(assembler_crc_negative) {

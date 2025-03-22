@@ -24,9 +24,10 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include "custom-disassembler.h"
+
 #include <regex>
 
-#include "custom-disassembler.h"
 #include "examples.h"
 
 using namespace vixl;
@@ -106,7 +107,7 @@ void CustomDisassembler::AppendCodeRelativeCodeAddressToOutput(
 
 // We override this method to add a comment to some instructions. Helpers from
 // the vixl::Instruction class can be used to analyse the instruction being
-// disasssembled.
+// disassembled.
 void CustomDisassembler::Visit(Metadata* metadata, const Instruction* instr) {
   vixl::aarch64::Disassembler::Visit(metadata, instr);
   const std::string& form = (*metadata)["form"];

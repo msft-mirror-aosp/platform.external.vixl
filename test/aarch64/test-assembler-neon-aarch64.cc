@@ -24,22 +24,21 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include <sys/mman.h>
-
 #include <cfloat>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <sys/mman.h>
 
 #include "test-runner.h"
 #include "test-utils.h"
-#include "aarch64/test-utils-aarch64.h"
 
 #include "aarch64/cpu-aarch64.h"
 #include "aarch64/disasm-aarch64.h"
 #include "aarch64/macro-assembler-aarch64.h"
 #include "aarch64/simulator-aarch64.h"
+#include "aarch64/test-utils-aarch64.h"
 #include "test-assembler-aarch64.h"
 
 namespace vixl {
@@ -5977,6 +5976,44 @@ TEST(neon_2regmisc_sqxtun) {
   }
 }
 
+TEST(neon_2regmisc_xtn_regression_test) {
+  SETUP_WITH_FEATURES(CPUFeatures::kNEON);
+
+  START();
+
+  __ Movi(v0.V2D(), 0x5555555555555555, 0x5555555555555555);
+  __ Movi(v1.V2D(), 0xaaaaaaaaaaaaaaaa, 0xaaaaaaaaaaaaaaaa);
+  __ Movi(v2.V2D(), 0x5555555555555555, 0x5555555555555555);
+  __ Movi(v3.V2D(), 0xaaaaaaaaaaaaaaaa, 0xaaaaaaaaaaaaaaaa);
+  __ Movi(v4.V2D(), 0x5555555555555555, 0x5555555555555555);
+  __ Movi(v5.V2D(), 0xaaaaaaaaaaaaaaaa, 0xaaaaaaaaaaaaaaaa);
+  __ Movi(v6.V2D(), 0x5555555555555555, 0x5555555555555555);
+  __ Movi(v7.V2D(), 0xaaaaaaaaaaaaaaaa, 0xaaaaaaaaaaaaaaaa);
+
+  __ Xtn(v0.V2S(), v0.V2D());
+  __ Xtn2(v1.V4S(), v1.V2D());
+  __ Sqxtn(v2.V2S(), v2.V2D());
+  __ Sqxtn2(v3.V4S(), v3.V2D());
+  __ Uqxtn(v4.V2S(), v4.V2D());
+  __ Uqxtn2(v5.V4S(), v5.V2D());
+  __ Sqxtun(v6.V2S(), v6.V2D());
+  __ Sqxtun2(v7.V4S(), v7.V2D());
+
+  END();
+
+  if (CAN_RUN()) {
+    RUN();
+    ASSERT_EQUAL_128(0x0000000000000000, 0x5555555555555555, q0);
+    ASSERT_EQUAL_128(0xaaaaaaaaaaaaaaaa, 0xaaaaaaaaaaaaaaaa, q1);
+    ASSERT_EQUAL_128(0x0000000000000000, 0x7fffffff7fffffff, q2);
+    ASSERT_EQUAL_128(0x8000000080000000, 0xaaaaaaaaaaaaaaaa, q3);
+    ASSERT_EQUAL_128(0x0000000000000000, 0xffffffffffffffff, q4);
+    ASSERT_EQUAL_128(0xffffffffffffffff, 0xaaaaaaaaaaaaaaaa, q5);
+    ASSERT_EQUAL_128(0x0000000000000000, 0xffffffffffffffff, q6);
+    ASSERT_EQUAL_128(0x0000000000000000, 0xaaaaaaaaaaaaaaaa, q7);
+  }
+}
+
 TEST(neon_3same_and) {
   SETUP_WITH_FEATURES(CPUFeatures::kNEON);
 
@@ -10938,8 +10975,26 @@ TEST(neon_usdot_element) {
   }
 }
 
+TEST(neon_pmull_regression_test) {
+  SETUP_WITH_FEATURES(CPUFeatures::kNEON);
+
+  START();
+  __ Movi(v0.V2D(), 0xdecafc0ffee);
+  __ Pmull(v0.V8H(), v0.V8B(), v0.V8B());
+
+  __ Movi(v1.V2D(), 0xaaaaaaaa55555555);
+  __ Pmull2(v1.V8H(), v1.V16B(), v1.V16B());
+  END();
+
+  if (CAN_RUN()) {
+    RUN();
+    ASSERT_EQUAL_128(0x0000000000515450, 0x4455500055555454, q0);
+    ASSERT_EQUAL_128(0x4444444444444444, 0x1111111111111111, q1);
+  }
+}
+
 TEST(zero_high_b) {
-  SETUP_WITH_FEATURES(CPUFeatures::kSVE, CPUFeatures::kNEON, CPUFeatures::kRDM);
+  SETUP_WITH_FEATURES(CPUFeatures::kSVE, CPUFeatures::kNEON);
   START();
 
   __ Mov(x0, 0x55aa42ffaa42ff55);
@@ -10959,7 +11014,7 @@ TEST(zero_high_b) {
   __ Ror(x0, x0, 8);
 
   {
-    ExactAssemblyScope scope(&masm, 81 * kInstructionSize);
+    ExactAssemblyScope scope(&masm, 75 * kInstructionSize);
     __ movi(q9.V16B(), 0x55);
     __ dci(0x5e010409);  // mov b9, v0.b[0]
     __ orr(q30.V16B(), q30.V16B(), q9.V16B());
@@ -10974,14 +11029,6 @@ TEST(zero_high_b) {
 
     __ movi(q9.V16B(), 0x55);
     __ dci(0x7e207809);  // sqneg b9, b0
-    __ orr(q30.V16B(), q30.V16B(), q9.V16B());
-
-    __ movi(q9.V16B(), 0x55);
-    __ dci(0x7e008429);  // sqrdmlah b9, b1, b0
-    __ orr(q30.V16B(), q30.V16B(), q9.V16B());
-
-    __ movi(q9.V16B(), 0x55);
-    __ dci(0x7e008c29);  // sqrdmlsh b9, b1, b0
     __ orr(q30.V16B(), q30.V16B(), q9.V16B());
 
     __ movi(q9.V16B(), 0x55);
@@ -11784,10 +11831,7 @@ TEST(zero_high_s) {
 }
 
 TEST(zero_high_d) {
-  SETUP_WITH_FEATURES(CPUFeatures::kSVE,
-                      CPUFeatures::kNEON,
-                      CPUFeatures::kFP,
-                      CPUFeatures::kRDM);
+  SETUP_WITH_FEATURES(CPUFeatures::kSVE, CPUFeatures::kNEON, CPUFeatures::kFP);
   START();
 
   __ Mov(x0, 0x55aa42ffaa42ff55);
@@ -11807,7 +11851,7 @@ TEST(zero_high_d) {
   __ Ror(x0, x0, 8);
 
   {
-    ExactAssemblyScope scope(&masm, 291 * kInstructionSize);
+    ExactAssemblyScope scope(&masm, 285 * kInstructionSize);
     __ movi(q9.V16B(), 0x55);
     __ dci(0x5ee0b809);  // abs d9, d0
     __ orr(q30.V16B(), q30.V16B(), q9.V16B());
@@ -12074,14 +12118,6 @@ TEST(zero_high_d) {
 
     __ movi(q9.V16B(), 0x55);
     __ dci(0x7ee07809);  // sqneg d9, d0
-    __ orr(q30.V16B(), q30.V16B(), q9.V16B());
-
-    __ movi(q9.V16B(), 0x55);
-    __ dci(0x7ec08429);  // sqrdmlah d9, d1, d0
-    __ orr(q30.V16B(), q30.V16B(), q9.V16B());
-
-    __ movi(q9.V16B(), 0x55);
-    __ dci(0x7ec08c29);  // sqrdmlsh d9, d1, d0
     __ orr(q30.V16B(), q30.V16B(), q9.V16B());
 
     __ movi(q9.V16B(), 0x55);

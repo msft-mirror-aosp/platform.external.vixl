@@ -67,7 +67,8 @@ class PRegisterZ;
 // specialised register types can avoid run-time checks, and should therefore be
 // preferred where run-time polymorphism isn't required.
 //
-// Type-specific modifers are typically implemented only on the derived classes.
+// Type-specific modifiers are typically implemented only on the derived
+// classes.
 //
 // The encoding is such that CPURegister objects are cheap to pass by value.
 class CPURegister {
@@ -574,6 +575,7 @@ class VRegister : public CPURegister {
   VRegister V4S() const;
   VRegister V1D() const;
   VRegister V2D() const;
+  VRegister V1Q() const;
   VRegister S4B() const;
 
   bool IsValid() const { return IsValidVRegister(); }
@@ -894,7 +896,7 @@ bool AreSameLaneSize(const CPURegister& reg1,
                      const CPURegister& reg2,
                      const CPURegister& reg3 = NoCPUReg,
                      const CPURegister& reg4 = NoCPUReg);
-}
-}  // namespace vixl::aarch64
+}  // namespace aarch64
+}  // namespace vixl
 
 #endif  // VIXL_AARCH64_REGISTERS_AARCH64_H_

@@ -266,8 +266,8 @@ MemOperand MacroAssembler::MemOperandComputationHelper(
 
   uint32_t load_store_offset = offset & extra_offset_mask;
   uint32_t add_offset = offset & ~extra_offset_mask;
-  if ((add_offset != 0) &&
-      (IsModifiedImmediate(offset) || IsModifiedImmediate(-offset))) {
+  if ((add_offset != 0) && (IsModifiedImmediate(offset) ||
+                            IsModifiedImmediate(UnsignedNegate(offset)))) {
     load_store_offset = 0;
     add_offset = offset;
   }
@@ -288,7 +288,7 @@ MemOperand MacroAssembler::MemOperandComputationHelper(
       // of ADR -- to get behaviour like loads and stores. This ADR can handle
       // at least as much offset as the load_store_offset so it can replace it.
 
-      uint32_t sub_pc_offset = (-offset) & 0xfff;
+      uint32_t sub_pc_offset = UnsignedNegate(offset) & 0xfff;
       load_store_offset = (offset + sub_pc_offset) & extra_offset_mask;
       add_offset = (offset + sub_pc_offset) & ~extra_offset_mask;
 
@@ -599,7 +599,7 @@ void MacroAssembler::Printf(const char* format,
     Vmsr(FPSCR, tmp);
     Pop(tmp);
     Msr(APSR_nzcvqg, tmp);
-    // Restore the regsisters.
+    // Restore the registers.
     if (Has32DRegs()) Vpop(Untyped64, DRegisterList(d16, 16));
     Vpop(Untyped64, DRegisterList(d0, 8));
     Pop(RegisterList(saved_registers_mask));
@@ -1242,6 +1242,53 @@ void MacroAssembler::Delegate(InstructionType type,
     }
   }
   Assembler::Delegate(type, instruction, rn, location);
+}
+
+
+void MacroAssembler::Delegate(InstructionType type,
+                              InstructionCondSizeL instruction,
+                              Condition cond,
+                              EncodingSize size,
+                              Location* location) {
+  VIXL_ASSERT(type == kB);
+
+  CONTEXT_SCOPE;
+
+  // Apply veneer to increase range of backwards conditional branches.
+  // This replaces:
+  //   label:
+  //    <instructions>
+  //    bcond label   ; T3
+  // With:
+  //   label:
+  //    <instructions>
+  //    binvcond skip ; T1
+  //    b label       ; T4
+  //   skip:
+  Location::Offset offset = location->GetLocation() -
+    (GetCursorOffset() + GetArchitectureStatePCOffset());
+  if (IsUsingT32() && location->IsBound() && ((offset & 0x1) == 0) &&
+      !cond.Is(al) && cond.IsNotNever()) {
+    // Bound locations must be earlier in the code.
+    VIXL_ASSERT(offset < 0);
+
+    // The offset must be within range of a T4 branch, accounting for the
+    // conditional branch (T1) we emit first, in order to jump over it.
+    offset -= k16BitT32InstructionSizeInBytes;
+    if (offset >= -16777216) {
+      CodeBufferCheckScope scope(this, k16BitT32InstructionSizeInBytes +
+                                       k32BitT32InstructionSizeInBytes);
+      Label skip;
+      b(cond.Negate(), Narrow, &skip);
+      b(location);
+      Bind(&skip);
+      return;
+    } else {
+      VIXL_ABORT_WITH_MSG("Conditional branch too far for veneer.\n");
+    }
+  }
+
+  Assembler::Delegate(type, instruction, cond, size, location);
 }
 
 

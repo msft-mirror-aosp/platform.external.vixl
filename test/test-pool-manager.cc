@@ -297,7 +297,7 @@ void PoolManager<int32_t>::DumpCurrentState(int32_t pc) const {
                object.max_location_));
   }
 }
-}
+}  // namespace vixl
 
 // Basic test - checks that emitting a very simple pool works.
 TEST(Basic) {
@@ -343,14 +343,15 @@ static ForwardReference<int32_t> *CreateReference(int id,
                                                   int32_t min_offset,
                                                   int32_t max_offset,
                                                   int alignment) {
-  IF_VERBOSE(printf(
-      "About to add a new reference to object %d with min location = %d, max "
-      "location = %d, alignment = %d, size = %d\n",
-      id,
-      min_offset + pc,
-      max_offset + pc,
-      alignment,
-      size));
+  IF_VERBOSE(
+      printf("About to add a new reference to object %d with min location = "
+             "%d, max "
+             "location = %d, alignment = %d, size = %d\n",
+             id,
+             min_offset + pc,
+             max_offset + pc,
+             alignment,
+             size));
   return new ForwardReference<int32_t>(pc,
                                        size,
                                        min_offset + pc,
@@ -375,7 +376,7 @@ TEST(FuzzObjectDeletedWhenPlaced) {
   }
 
   int32_t pc = 0;
-  for (int i = 0; !objects.empty(); ++i) {
+  while (!objects.empty()) {
     IF_VERBOSE(printf("PC = 0x%x (%d)\n", pc, pc));
     int32_t pc_increment = RandomPCIncrement();
     IF_VERBOSE(printf("Attempting to increment PC by %d\n", pc_increment));
@@ -450,7 +451,7 @@ TEST(FuzzObjectUpdatedWhenPlaced) {
   }
 
   int32_t pc = 0;
-  for (int i = 0; !objects.empty(); ++i) {
+  while (!objects.empty()) {
     IF_VERBOSE(printf("PC = 0x%x (%d)\n", pc, pc));
 
     int32_t pc_increment = RandomPCIncrement();
@@ -797,7 +798,7 @@ TEST(MustEmitNewReferenceDueToSizeOfObject) {
 
 
   // Increment PC to close to the checkpoint of the pools minus a known
-  // thershold.
+  // threshold.
   const int kBigObjectSize = 1024;
   TestPoolManager test(&pool_manager);
   pc = test.GetPoolCheckpoint() - kBigObjectSize;

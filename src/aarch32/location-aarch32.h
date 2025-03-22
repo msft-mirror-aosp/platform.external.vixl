@@ -71,6 +71,8 @@ class Location : public LocationBase<int32_t> {
 #endif
   }
 
+  Location(Location&&) = default; // movable
+
   bool IsReferenced() const { return referenced_; }
 
  private:
@@ -217,7 +219,7 @@ class Location : public LocationBase<int32_t> {
 
  protected:
   // Types passed to LocationBase. Must be distinct for unbound Locations (not
-  // relevant for bound locations, as they don't have a correspoding
+  // relevant for bound locations, as they don't have a corresponding
   // PoolObject).
   static const int kRawLocation = 0;  // Will not be used by the pool manager.
   static const int kVeneerType = 1;
@@ -318,6 +320,12 @@ class RawLiteral : public Location {
         addr_(addr),
         manually_placed_(false),
         deletion_policy_(deletion_policy) {}
+
+  // noncopyable to avoid one instruction appearing to refer to two or more literals
+  RawLiteral(const RawLiteral&) = delete;
+
+  RawLiteral(RawLiteral &&) = default; // movable
+
   const void* GetDataAddress() const { return addr_; }
   int GetSize() const { return GetPoolObjectSizeInBytes(); }
 

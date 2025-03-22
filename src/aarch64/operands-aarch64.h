@@ -735,7 +735,7 @@ class SVEMemOperand {
 class IntegerOperand {
  public:
 #define VIXL_INT_TYPES(V) \
-  V(char) V(short) V(int) V(long) V(long long)  // NOLINT(runtime/int)
+  V(char) V(short) V(int) V(long) V(long long)  // NOLINT(google-runtime-int)
 #define VIXL_DECL_INT_OVERLOADS(T)                                        \
   /* These are allowed to be implicit constructors because this is a */   \
   /* wrapper class that doesn't normally perform any type conversion. */  \
@@ -873,7 +873,7 @@ class IntegerOperand {
     return TryEncodeAsShiftedIntNForLane<N, 0>(zd, imm);
   }
 
-  // As above, but for unsigned fields. This is usuaully a simple operation, but
+  // As above, but for unsigned fields. This is usually a simple operation, but
   // is provided for symmetry.
   template <unsigned N, unsigned kShift, typename T>
   bool TryEncodeAsShiftedUintNForLane(const CPURegister& zd, T* imm) const {
@@ -909,7 +909,7 @@ class IntegerOperand {
   bool IsPositiveOrZero() const { return !is_negative_; }
 
   uint64_t GetMagnitude() const {
-    return is_negative_ ? -raw_bits_ : raw_bits_;
+    return is_negative_ ? UnsignedNegate(raw_bits_) : raw_bits_;
   }
 
  private:
@@ -993,7 +993,7 @@ class GenericOperand {
   // We only support sizes up to X/D register sizes.
   size_t mem_op_size_;
 };
-}
-}  // namespace vixl::aarch64
+}  // namespace aarch64
+}  // namespace vixl
 
 #endif  // VIXL_AARCH64_OPERANDS_AARCH64_H_

@@ -29,17 +29,16 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-
 #include <fstream>
 #include <regex>
 
 #include "test-runner.h"
-#include "test-utils-aarch64.h"
 
 #include "aarch64/cpu-aarch64.h"
 #include "aarch64/disasm-aarch64.h"
 #include "aarch64/macro-assembler-aarch64.h"
 #include "aarch64/simulator-aarch64.h"
+#include "test-utils-aarch64.h"
 
 namespace vixl {
 namespace aarch64 {
@@ -370,6 +369,16 @@ static void GenerateTestSequenceBase(MacroAssembler* masm) {
   __ uxth(x6, x7);
   __ uxtw(w8, w9);
   __ uxtw(x10, x11);
+
+  // Regression tests.
+  __ stp(x10, xzr, MemOperand(sp, -16, PreIndex));
+  __ ldp(x10, xzr, MemOperand(sp, 16, PostIndex));
+  __ str(xzr, MemOperand(sp, -16, PreIndex));
+  __ ldrsb(xzr, MemOperand(sp, 16, PostIndex));
+  __ str(xzr, MemOperand(sp, -16, PreIndex));
+  __ ldrsh(xzr, MemOperand(sp, 16, PostIndex));
+  __ str(xzr, MemOperand(sp, -16, PreIndex));
+  __ ldrsw(xzr, MemOperand(sp, 16, PostIndex));
 
   // Branch tests.
   {

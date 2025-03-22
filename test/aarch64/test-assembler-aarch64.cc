@@ -24,23 +24,23 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include <sys/mman.h>
+#include "test-assembler-aarch64.h"
 
 #include <cfloat>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <sys/mman.h>
 
 #include "test-runner.h"
 #include "test-utils.h"
-#include "aarch64/test-utils-aarch64.h"
 
 #include "aarch64/cpu-aarch64.h"
 #include "aarch64/disasm-aarch64.h"
 #include "aarch64/macro-assembler-aarch64.h"
 #include "aarch64/simulator-aarch64.h"
-#include "test-assembler-aarch64.h"
+#include "aarch64/test-utils-aarch64.h"
 
 namespace vixl {
 namespace aarch64 {
@@ -1634,10 +1634,18 @@ TEST(pacia_pacib_autia_autib) {
   START();
 
   Register pointer = x24;
-  Register modifier = x25;
+  Register retry_limit = x25;
+  Register modifier = x26;
+  Label retry;
 
+  // There is a small but not negligible chance (1 in 127 runs) that the PAC
+  // codes for keys A and B will collide, so retry a few times with different
+  // pointers.
   __ Mov(pointer, 0x0000000012345678);
+  __ Mov(retry_limit, 0x0000000012345678 + 32);
   __ Mov(modifier, 0x477d469dec0b8760);
+
+  __ Bind(&retry);
 
   // Generate PACs using keys A and B.
   __ Mov(x0, pointer);
@@ -1660,21 +1668,24 @@ TEST(pacia_pacib_autia_autib) {
   __ Mov(x5, x0);
   __ Autib(x5, modifier);
 
-  // Mask out just the PAC code bits.
-  // TODO: use Simulator::CalculatePACMask in a nice way.
-  __ And(x0, x0, 0x007f000000000000);
-  __ And(x1, x1, 0x007f000000000000);
+  // Retry on collisions.
+  __ Cmp(x0, x1);
+  __ Ccmp(pointer, x0, ZFlag, ne);
+  __ Ccmp(pointer, x1, ZFlag, ne);
+  __ Ccmp(pointer, x4, ZFlag, ne);
+  __ Ccmp(pointer, x5, ZFlag, ne);
+  __ Ccmp(pointer, retry_limit, ZFlag, eq);
+  __ Cinc(pointer, pointer, ne);
+  __ B(ne, &retry);
 
   END();
 
   if (CAN_RUN()) {
     RUN();
 
-    // Check PAC codes have been generated and aren't equal.
-    // NOTE: with a different ComputePAC implementation, there may be a
-    // collision.
-    ASSERT_NOT_EQUAL_64(0, x0);
-    ASSERT_NOT_EQUAL_64(0, x1);
+    // Check PAC codes have been generated.
+    ASSERT_NOT_EQUAL_64(pointer, x0);
+    ASSERT_NOT_EQUAL_64(pointer, x1);
     ASSERT_NOT_EQUAL_64(x0, x1);
 
     // Pointers correctly authenticated.
@@ -1682,8 +1693,13 @@ TEST(pacia_pacib_autia_autib) {
     ASSERT_EQUAL_64(pointer, x3);
 
     // Pointers corrupted after failing to authenticate.
+#ifdef VIXL_INCLUDE_SIMULATOR_AARCH64
     ASSERT_EQUAL_64(0x0020000012345678, x4);
     ASSERT_EQUAL_64(0x0040000012345678, x5);
+#else
+    ASSERT_NOT_EQUAL_64(pointer, x4);
+    ASSERT_NOT_EQUAL_64(pointer, x5);
+#endif
   }
 }
 
@@ -1694,8 +1710,16 @@ TEST(paciza_pacizb_autiza_autizb) {
   START();
 
   Register pointer = x24;
+  Register retry_limit = x25;
+  Label retry;
 
+  // There is a small but not negligible chance (1 in 127 runs) that the PAC
+  // codes for keys A and B will collide, so retry a few times with different
+  // pointers.
   __ Mov(pointer, 0x0000000012345678);
+  __ Mov(retry_limit, 0x0000000012345678 + 32);
+
+  __ Bind(&retry);
 
   // Generate PACs using keys A and B.
   __ Mov(x0, pointer);
@@ -1718,21 +1742,24 @@ TEST(paciza_pacizb_autiza_autizb) {
   __ Mov(x5, x0);
   __ Autizb(x5);
 
-  // Mask out just the PAC code bits.
-  // TODO: use Simulator::CalculatePACMask in a nice way.
-  __ And(x0, x0, 0x007f000000000000);
-  __ And(x1, x1, 0x007f000000000000);
+  // Retry on collisions.
+  __ Cmp(x0, x1);
+  __ Ccmp(pointer, x0, ZFlag, ne);
+  __ Ccmp(pointer, x1, ZFlag, ne);
+  __ Ccmp(pointer, x4, ZFlag, ne);
+  __ Ccmp(pointer, x5, ZFlag, ne);
+  __ Ccmp(pointer, retry_limit, ZFlag, eq);
+  __ Cinc(pointer, pointer, ne);
+  __ B(ne, &retry);
 
   END();
 
   if (CAN_RUN()) {
     RUN();
 
-    // Check PAC codes have been generated and aren't equal.
-    // NOTE: with a different ComputePAC implementation, there may be a
-    // collision.
-    ASSERT_NOT_EQUAL_64(0, x0);
-    ASSERT_NOT_EQUAL_64(0, x1);
+    // Check PAC codes have been generated.
+    ASSERT_NOT_EQUAL_64(pointer, x0);
+    ASSERT_NOT_EQUAL_64(pointer, x1);
     ASSERT_NOT_EQUAL_64(x0, x1);
 
     // Pointers correctly authenticated.
@@ -1740,8 +1767,13 @@ TEST(paciza_pacizb_autiza_autizb) {
     ASSERT_EQUAL_64(pointer, x3);
 
     // Pointers corrupted after failing to authenticate.
+#ifdef VIXL_INCLUDE_SIMULATOR_AARCH64
     ASSERT_EQUAL_64(0x0020000012345678, x4);
     ASSERT_EQUAL_64(0x0040000012345678, x5);
+#else
+    ASSERT_NOT_EQUAL_64(pointer, x4);
+    ASSERT_NOT_EQUAL_64(pointer, x5);
+#endif
   }
 }
 
@@ -1752,10 +1784,18 @@ TEST(pacda_pacdb_autda_autdb) {
   START();
 
   Register pointer = x24;
-  Register modifier = x25;
+  Register retry_limit = x25;
+  Register modifier = x26;
+  Label retry;
 
+  // There is a small but not negligible chance (1 in 127 runs) that the PAC
+  // codes for keys A and B will collide, so retry a few times with different
+  // pointers.
   __ Mov(pointer, 0x0000000012345678);
+  __ Mov(retry_limit, 0x0000000012345678 + 32);
   __ Mov(modifier, 0x477d469dec0b8760);
+
+  __ Bind(&retry);
 
   // Generate PACs using keys A and B.
   __ Mov(x0, pointer);
@@ -1778,21 +1818,24 @@ TEST(pacda_pacdb_autda_autdb) {
   __ Mov(x5, x0);
   __ Autdb(x5, modifier);
 
-  // Mask out just the PAC code bits.
-  // TODO: use Simulator::CalculatePACMask in a nice way.
-  __ And(x0, x0, 0x007f000000000000);
-  __ And(x1, x1, 0x007f000000000000);
+  // Retry on collisions.
+  __ Cmp(x0, x1);
+  __ Ccmp(pointer, x0, ZFlag, ne);
+  __ Ccmp(pointer, x1, ZFlag, ne);
+  __ Ccmp(pointer, x4, ZFlag, ne);
+  __ Ccmp(pointer, x5, ZFlag, ne);
+  __ Ccmp(pointer, retry_limit, ZFlag, eq);
+  __ Cinc(pointer, pointer, ne);
+  __ B(ne, &retry);
 
   END();
 
   if (CAN_RUN()) {
     RUN();
 
-    // Check PAC codes have been generated and aren't equal.
-    // NOTE: with a different ComputePAC implementation, there may be a
-    // collision.
-    ASSERT_NOT_EQUAL_64(0, x0);
-    ASSERT_NOT_EQUAL_64(0, x1);
+    // Check PAC codes have been generated.
+    ASSERT_NOT_EQUAL_64(pointer, x0);
+    ASSERT_NOT_EQUAL_64(pointer, x1);
     ASSERT_NOT_EQUAL_64(x0, x1);
 
     // Pointers correctly authenticated.
@@ -1800,8 +1843,13 @@ TEST(pacda_pacdb_autda_autdb) {
     ASSERT_EQUAL_64(pointer, x3);
 
     // Pointers corrupted after failing to authenticate.
+#ifdef VIXL_INCLUDE_SIMULATOR_AARCH64
     ASSERT_EQUAL_64(0x0020000012345678, x4);
     ASSERT_EQUAL_64(0x0040000012345678, x5);
+#else
+    ASSERT_NOT_EQUAL_64(pointer, x4);
+    ASSERT_NOT_EQUAL_64(pointer, x5);
+#endif
   }
 }
 
@@ -1812,8 +1860,16 @@ TEST(pacdza_pacdzb_autdza_autdzb) {
   START();
 
   Register pointer = x24;
+  Register retry_limit = x25;
+  Label retry;
 
+  // There is a small but not negligible chance (1 in 127 runs) that the PAC
+  // codes for keys A and B will collide, so retry a few times with different
+  // pointers.
   __ Mov(pointer, 0x0000000012345678);
+  __ Mov(retry_limit, 0x0000000012345678 + 32);
+
+  __ Bind(&retry);
 
   // Generate PACs using keys A and B.
   __ Mov(x0, pointer);
@@ -1836,21 +1892,24 @@ TEST(pacdza_pacdzb_autdza_autdzb) {
   __ Mov(x5, x0);
   __ Autdzb(x5);
 
-  // Mask out just the PAC code bits.
-  // TODO: use Simulator::CalculatePACMask in a nice way.
-  __ And(x0, x0, 0x007f000000000000);
-  __ And(x1, x1, 0x007f000000000000);
+  // Retry on collisions.
+  __ Cmp(x0, x1);
+  __ Ccmp(pointer, x0, ZFlag, ne);
+  __ Ccmp(pointer, x1, ZFlag, ne);
+  __ Ccmp(pointer, x4, ZFlag, ne);
+  __ Ccmp(pointer, x5, ZFlag, ne);
+  __ Ccmp(pointer, retry_limit, ZFlag, eq);
+  __ Cinc(pointer, pointer, ne);
+  __ B(ne, &retry);
 
   END();
 
   if (CAN_RUN()) {
     RUN();
 
-    // Check PAC codes have been generated and aren't equal.
-    // NOTE: with a different ComputePAC implementation, there may be a
-    // collision.
-    ASSERT_NOT_EQUAL_64(0, x0);
-    ASSERT_NOT_EQUAL_64(0, x1);
+    // Check PAC codes have been generated.
+    ASSERT_NOT_EQUAL_64(pointer, x0);
+    ASSERT_NOT_EQUAL_64(pointer, x1);
     ASSERT_NOT_EQUAL_64(x0, x1);
 
     // Pointers correctly authenticated.
@@ -1858,8 +1917,13 @@ TEST(pacdza_pacdzb_autdza_autdzb) {
     ASSERT_EQUAL_64(pointer, x3);
 
     // Pointers corrupted after failing to authenticate.
+#ifdef VIXL_INCLUDE_SIMULATOR_AARCH64
     ASSERT_EQUAL_64(0x0020000012345678, x4);
     ASSERT_EQUAL_64(0x0040000012345678, x5);
+#else
+    ASSERT_NOT_EQUAL_64(pointer, x4);
+    ASSERT_NOT_EQUAL_64(pointer, x5);
+#endif
   }
 }
 
@@ -1870,10 +1934,18 @@ TEST(pacga_xpaci_xpacd) {
   START();
 
   Register pointer = x24;
-  Register modifier = x25;
+  Register retry_limit = x25;
+  Register modifier = x26;
+  Label retry;
 
+  // There is a small but not negligible chance (1 in 127 runs) that the PAC
+  // codes for keys A and B will collide, so retry a few times with different
+  // pointers.
   __ Mov(pointer, 0x0000000012345678);
+  __ Mov(retry_limit, 0x0000000012345678 + 32);
   __ Mov(modifier, 0x477d469dec0b8760);
+
+  __ Bind(&retry);
 
   // Generate generic PAC.
   __ Pacga(x0, pointer, modifier);
@@ -1890,25 +1962,24 @@ TEST(pacga_xpaci_xpacd) {
   __ Xpaci(x3);
   __ Xpacd(x4);
 
-  // Mask out just the PAC code bits.
-  // TODO: use Simulator::CalculatePACMask in a nice way.
-  __ And(x0, x0, 0xffffffff00000000);
-  __ And(x1, x1, 0x007f000000000000);
-  __ And(x2, x2, 0x007f000000000000);
+  // Retry on collisions.
+  __ Cmp(x1, x2);
+  __ Ccmp(pointer, x0, ZFlag, ne);
+  __ Ccmp(pointer, x1, ZFlag, ne);
+  __ Ccmp(pointer, x2, ZFlag, ne);
+  __ Ccmp(pointer, retry_limit, ZFlag, eq);
+  __ Cinc(pointer, pointer, ne);
+  __ B(ne, &retry);
 
   END();
 
   if (CAN_RUN()) {
     RUN();
 
-
-    // Check PAC codes have been generated and aren't equal.
-    // NOTE: with a different ComputePAC implementation, there may be a
-    // collision.
-    ASSERT_NOT_EQUAL_64(0, x0);
-
-    ASSERT_NOT_EQUAL_64(0, x1);
-    ASSERT_NOT_EQUAL_64(0, x2);
+    // Check PAC codes have been generated.
+    ASSERT_NOT_EQUAL_64(pointer, x0);
+    ASSERT_NOT_EQUAL_64(pointer, x1);
+    ASSERT_NOT_EQUAL_64(pointer, x2);
     ASSERT_NOT_EQUAL_64(x1, x2);
 
     ASSERT_EQUAL_64(pointer, x3);
@@ -1916,6 +1987,34 @@ TEST(pacga_xpaci_xpacd) {
   }
 }
 
+TEST(pac_sp_modifier) {
+  SETUP_WITH_FEATURES(CPUFeatures::kPAuth);
+
+  START();
+
+  __ Mov(x0, 0x0000000012345678);
+  __ Mov(x1, x0);
+  __ Mov(x10, sp);
+
+  // Generate PACs using sp and register containing a copy of sp.
+  __ Pacia(x0, x10);
+  __ Pacia(x1, sp);
+
+  // Authenticate the pointers, exchanging (equal) modifiers.
+  __ Mov(x2, x0);
+  __ Mov(x3, x1);
+  __ Autia(x2, sp);
+  __ Autia(x3, x10);
+
+  END();
+
+  if (CAN_RUN()) {
+    RUN();
+
+    ASSERT_EQUAL_64(x0, x1);
+    ASSERT_EQUAL_64(x2, x3);
+  }
+}
 
 TEST(label) {
   SETUP();
@@ -2548,13 +2647,18 @@ TEST(return_to_reg_auth_guarded) {
   if (CAN_RUN()) {
 #ifdef VIXL_INCLUDE_SIMULATOR_AARCH64
     simulator.SetGuardedPages(true);
-#else
-    VIXL_UNIMPLEMENTED();
 #endif
+    // On hardware, we'll run the test anyway, but mark it as SKIPPED until
+    // we've implemented a mechanism for marking Guarded pages.
+
     RUN();
 
     ASSERT_EQUAL_64(42, x0);
     ASSERT_EQUAL_64(84, x1);
+
+#ifndef VIXL_INCLUDE_SIMULATOR_AARCH64
+    printf("SKIPPED: marking guarded pages is unimplemented on hardware");
+#endif
   }
 }
 
@@ -2587,7 +2691,11 @@ TEST(branch_to_reg_auth_fail) {
   END();
 
   if (CAN_RUN()) {
+#ifdef VIXL_INCLUDE_SIMULATOR_AARCH64
     MUST_FAIL_WITH_MESSAGE(RUN(), "Failed to authenticate pointer.");
+#else
+    printf("SKIPPED: negative PAuth tests are unimplemented on hardware.");
+#endif
   }
 }
 #endif  // VIXL_NEGATIVE_TESTING
@@ -2623,7 +2731,11 @@ TEST(return_to_reg_auth_fail) {
   END();
 
   if (CAN_RUN()) {
+#ifdef VIXL_INCLUDE_SIMULATOR_AARCH64
     MUST_FAIL_WITH_MESSAGE(RUN(), "Failed to authenticate pointer.");
+#else
+    printf("SKIPPED: negative PAuth tests are unimplemented on hardware.");
+#endif
   }
 }
 #endif  // VIXL_NEGATIVE_TESTING
@@ -2858,6 +2970,372 @@ TEST(branch_type) {
   }
 }
 
+enum MTEStgAttribute {
+  StgNoSideEffect = 0,
+  StgPairTag = 1,
+  StgZeroing = 2,
+  StgPairReg = 4
+};
+
+// Support st2g, stg, stz2g and stzg.
+template <typename Op>
+static void MTEStoreTagHelper(Op op,
+                              AddrMode addr_mode,
+                              int attr = StgNoSideEffect) {
+  SETUP_WITH_FEATURES(CPUFeatures::kMTE);
+  START();
+
+  // This method does nothing when the size is zero. i.e. stg and st2g.
+  // Reserve x9 and x10.
+  auto LoadDataAndSum = [&](Register reg, int off, unsigned size_in_bytes) {
+    for (unsigned j = 0; j < size_in_bytes / kXRegSizeInBytes; j++) {
+      __ Ldr(x9, MemOperand(reg, off));
+      __ Add(x10, x9, x10);
+      off += kXRegSizeInBytes;
+    }
+  };
+
+  // Initialize registers to zero.
+  for (int i = 0; i < 29; i++) {
+    __ Mov(XRegister(i), 0);
+  }
+
+  Register base = x28;
+  Register base_tag = x27;
+  uint32_t* data_ptr = nullptr;
+  const int data_size = 640;
+#ifdef VIXL_INCLUDE_SIMULATOR_AARCH64
+  data_ptr = reinterpret_cast<uint32_t*>(
+      simulator.Mmap(NULL,
+                     data_size * sizeof(uint32_t),
+                     PROT_READ | PROT_WRITE | PROT_MTE,
+                     MAP_PRIVATE | MAP_ANONYMOUS,
+                     -1,
+                     0));
+
+  VIXL_ASSERT(data_ptr != nullptr);
+  uint32_t* untagged_ptr = AddressUntag(data_ptr);
+  memset(untagged_ptr, 0xae, data_size * sizeof(uint32_t));
+#else
+// TODO: Port the memory allocation to work on MTE supported platform natively.
+// Note that `CAN_RUN` prevents running in MTE-unsupported environments.
+#endif
+
+  __ Mov(base, reinterpret_cast<uint64_t>(&data_ptr[data_size / 2]));
+
+  VIXL_STATIC_ASSERT(kMTETagGranuleInBytes == 16);
+  const int tag_granule = kMTETagGranuleInBytes;
+  int size = ((attr & StgZeroing) != 0) ? tag_granule : 0;
+  // lsb of MTE tag field.
+  const int tag_lsb = 56;
+
+  for (int i = 1; i < 7; i++) {
+    uint64_t tag = static_cast<uint64_t>(i) << tag_lsb;
+    int offset = 2 * i * tag_granule;
+    __ Mov(XRegister(i), tag);
+    (masm.*op)(XRegister(i), MemOperand(base, offset, addr_mode));
+
+    // The address tag has been changed after the execution of store tag
+    // instructions, so update the pointer tag as well.
+    __ Bic(base_tag, base, 0x0f00000000000000);
+    __ Orr(base_tag, base_tag, XRegister(i));
+
+    switch (addr_mode) {
+      case Offset:
+        __ Ldg(XRegister(i + 10), MemOperand(base_tag, offset));
+        LoadDataAndSum(base_tag, offset, size);
+        if ((attr & StgPairTag) != 0) {
+          __ Ldg(XRegister(i + 20), MemOperand(base_tag, offset + tag_granule));
+          LoadDataAndSum(base_tag, offset + tag_granule, size);
+        }
+        break;
+
+      case PreIndex:
+        __ Ldg(XRegister(i + 10), MemOperand(base_tag));
+        LoadDataAndSum(base_tag, 0, size);
+        if ((attr & StgPairTag) != 0) {
+          __ Ldg(XRegister(i + 20), MemOperand(base_tag, tag_granule));
+          LoadDataAndSum(base_tag, tag_granule, size);
+        }
+        break;
+
+      case PostIndex:
+        __ Ldg(XRegister(i + 10), MemOperand(base_tag, -offset));
+        LoadDataAndSum(base_tag, -offset, size);
+        if ((attr & StgPairTag) != 0) {
+          __ Ldg(XRegister(i + 20),
+                 MemOperand(base_tag, -offset + tag_granule));
+          LoadDataAndSum(base_tag, -offset + tag_granule, size);
+        }
+        break;
+
+      default:
+        VIXL_UNIMPLEMENTED();
+        break;
+    }
+
+    // Switch the sign to test both positive and negative offsets.
+    offset = -offset;
+  }
+
+  int pos_offset = 304;
+  int neg_offset = -256;
+
+  // Backup stack pointer and others.
+  __ Mov(x7, sp);
+  __ Mov(base_tag, base);
+
+  // Test the cases where operand is the stack pointer.
+  __ Mov(x8, 11UL << tag_lsb);
+  __ Mov(sp, x8);
+  (masm.*op)(sp, MemOperand(base, neg_offset, addr_mode));
+
+  // Synthesise a new address with new tag and assign to the stack pointer.
+  __ Add(sp, base_tag, 32);
+  (masm.*op)(x8, MemOperand(sp, pos_offset, addr_mode));
+
+  switch (addr_mode) {
+    case Offset:
+      __ Ldg(x17, MemOperand(base, neg_offset));
+      __ Ldg(x19, MemOperand(sp, pos_offset));
+      if ((attr & StgPairTag) != 0) {
+        __ Ldg(x18, MemOperand(base, neg_offset + tag_granule));
+        __ Ldg(x20, MemOperand(sp, pos_offset + tag_granule));
+      }
+      break;
+    case PreIndex:
+      __ Ldg(x17, MemOperand(base));
+      __ Ldg(x19, MemOperand(sp));
+      if ((attr & StgPairTag) != 0) {
+        __ Ldg(x18, MemOperand(base, tag_granule));
+        __ Ldg(x20, MemOperand(sp, tag_granule));
+      }
+      break;
+    case PostIndex:
+      __ Ldg(x17, MemOperand(base, -neg_offset));
+      __ Ldg(x19, MemOperand(sp, -pos_offset));
+      if ((attr & StgPairTag) != 0) {
+        __ Ldg(x18, MemOperand(base, -neg_offset + tag_granule));
+        __ Ldg(x20, MemOperand(sp, -pos_offset + tag_granule));
+      }
+      break;
+    default:
+      VIXL_UNIMPLEMENTED();
+      break;
+  }
+
+  // Restore stack pointer.
+  __ Mov(sp, x7);
+
+  END();
+
+  if (CAN_RUN()) {
+#ifndef VIXL_INCLUDE_SIMULATOR_AARCH64
+    VIXL_UNIMPLEMENTED();
+#endif
+    RUN();
+
+    ASSERT_EQUAL_64(1UL << tag_lsb, x11);
+    ASSERT_EQUAL_64(2UL << tag_lsb, x12);
+    ASSERT_EQUAL_64(3UL << tag_lsb, x13);
+    ASSERT_EQUAL_64(4UL << tag_lsb, x14);
+    ASSERT_EQUAL_64(5UL << tag_lsb, x15);
+    ASSERT_EQUAL_64(6UL << tag_lsb, x16);
+    ASSERT_EQUAL_64(11UL << tag_lsb, x17);
+    ASSERT_EQUAL_64(11UL << tag_lsb, x19);
+
+    if ((attr & StgPairTag) != 0) {
+      ASSERT_EQUAL_64(1UL << tag_lsb, x21);
+      ASSERT_EQUAL_64(2UL << tag_lsb, x22);
+      ASSERT_EQUAL_64(3UL << tag_lsb, x23);
+      ASSERT_EQUAL_64(4UL << tag_lsb, x24);
+      ASSERT_EQUAL_64(5UL << tag_lsb, x25);
+      ASSERT_EQUAL_64(6UL << tag_lsb, x26);
+      ASSERT_EQUAL_64(11UL << tag_lsb, x18);
+      ASSERT_EQUAL_64(11UL << tag_lsb, x20);
+    }
+
+    if ((attr & StgZeroing) != 0) {
+      ASSERT_EQUAL_64(0, x10);
+    }
+  }
+
+#ifdef VIXL_INCLUDE_SIMULATOR_AARCH64
+  simulator.Munmap(data_ptr, data_size, PROT_MTE);
+#endif
+}
+
+TEST(st2g_ldg) {
+  MTEStoreTagHelper(&MacroAssembler::St2g, Offset, StgPairTag);
+  MTEStoreTagHelper(&MacroAssembler::St2g, PreIndex, StgPairTag);
+  MTEStoreTagHelper(&MacroAssembler::St2g, PostIndex, StgPairTag);
+}
+
+TEST(stg_ldg) {
+  MTEStoreTagHelper(&MacroAssembler::Stg, Offset);
+  MTEStoreTagHelper(&MacroAssembler::Stg, PreIndex);
+  MTEStoreTagHelper(&MacroAssembler::Stg, PostIndex);
+}
+
+TEST(stz2g_ldg) {
+  MTEStoreTagHelper(&MacroAssembler::Stz2g, Offset, StgPairTag | StgZeroing);
+  MTEStoreTagHelper(&MacroAssembler::Stz2g, PreIndex, StgPairTag | StgZeroing);
+  MTEStoreTagHelper(&MacroAssembler::Stz2g, PostIndex, StgPairTag | StgZeroing);
+}
+
+TEST(stzg_ldg) {
+  MTEStoreTagHelper(&MacroAssembler::Stzg, Offset, StgZeroing);
+  MTEStoreTagHelper(&MacroAssembler::Stzg, PreIndex, StgZeroing);
+  MTEStoreTagHelper(&MacroAssembler::Stzg, PostIndex, StgZeroing);
+}
+
+TEST(stgp_ldg) {
+  SETUP_WITH_FEATURES(CPUFeatures::kMTE);
+  START();
+
+  // Initialize registers to zero.
+  for (int i = 0; i < 29; i++) {
+    __ Mov(XRegister(i), 0);
+  }
+
+  // Reserve x14 and x15.
+  auto LoadDataAndSum = [&](Register reg, int off) {
+    __ Ldr(x14, MemOperand(reg, off));
+    __ Add(x15, x14, x15);
+    __ Ldr(x14, MemOperand(reg, off + static_cast<int>(kXRegSizeInBytes)));
+    __ Add(x15, x14, x15);
+  };
+
+  Register base = x28;
+  uint32_t* data_ptr = nullptr;
+  const int data_size = 640;
+  uint64_t init_tag = 17;
+#ifdef VIXL_INCLUDE_SIMULATOR_AARCH64
+  data_ptr = reinterpret_cast<uint32_t*>(
+      simulator.Mmap(NULL,
+                     data_size * sizeof(uint32_t),
+                     PROT_READ | PROT_WRITE | PROT_MTE,
+                     MAP_PRIVATE | MAP_ANONYMOUS,
+                     -1,
+                     0));
+
+  VIXL_ASSERT(data_ptr != nullptr);
+  init_tag = CPU::GetPointerTag(data_ptr);
+  uint32_t* untagged_ptr = AddressUntag(data_ptr);
+  memset(untagged_ptr, 0xc9, data_size * sizeof(uint32_t));
+#else
+// TODO: Port the memory allocation to work on MTE supported platform natively.
+// Note that `CAN_RUN` prevents running in MTE-unsupported environments.
+#endif
+
+  __ Mov(base, reinterpret_cast<uint64_t>(&data_ptr[data_size / 2]));
+
+  // lsb of MTE tag field.
+  const int tag_lsb = 56;
+  for (int i = 0; i < 11; i++) {
+    // <63..60> <59..56> <55........5> <4..0>
+    //        0       i             0      i
+    __ Mov(XRegister(i), i | (static_cast<uint64_t>(i) << tag_lsb));
+  }
+
+  // Backup stack pointer.
+  __ Mov(x0, sp);
+
+  int offset = -16;
+  __ Addg(base, base, 0, 1);
+  __ Stgp(x1, x2, MemOperand(base, offset, Offset));
+  // Make sure `ldg` works well with address that isn't tag-granule aligned.
+  __ Add(x29, base, 8);
+  __ Ldg(x18, MemOperand(x29, offset));
+  LoadDataAndSum(base, offset);
+
+  offset = -304;
+  __ Addg(base, base, 0, 1);
+  __ Stgp(x2, x3, MemOperand(base, offset, Offset));
+  __ Add(x29, base, 4);
+  __ Ldg(x19, MemOperand(x29, offset));
+  LoadDataAndSum(base, offset);
+
+  offset = 128;
+  __ Addg(base, base, 0, 1);
+  __ Stgp(x3, x4, MemOperand(base, offset, Offset));
+  __ Mov(sp, base);
+  __ Ldg(x20, MemOperand(sp, offset));
+  LoadDataAndSum(base, offset);
+
+  offset = -48;
+  __ Addg(base, base, 0, 1);
+  __ Stgp(x4, x5, MemOperand(base, offset, PreIndex));
+  __ Add(x29, base, 8);
+  __ Ldg(x21, MemOperand(x29));
+  LoadDataAndSum(base, 0);
+
+  offset = 64;
+  __ Addg(base, base, 0, 1);
+  __ Stgp(x5, x6, MemOperand(base, offset, PreIndex));
+  __ Add(x29, base, 4);
+  __ Ldg(x22, MemOperand(x29));
+  LoadDataAndSum(base, 0);
+
+  offset = -288;
+  __ Addg(base, base, 0, 1);
+  __ Stgp(x6, x7, MemOperand(base, offset, PreIndex));
+  __ Mov(sp, base);
+  __ Ldg(x23, MemOperand(sp));
+  LoadDataAndSum(base, 0);
+
+  offset = -96;
+  __ Addg(base, base, 0, 1);
+  __ Stgp(x7, x8, MemOperand(base, offset, PostIndex));
+  __ Add(x29, base, 8);
+  __ Ldg(x24, MemOperand(x29, -offset));
+  LoadDataAndSum(base, -offset);
+
+  offset = 80;
+  __ Addg(base, base, 0, 1);
+  __ Stgp(x8, x9, MemOperand(base, offset, PostIndex));
+  __ Add(x29, base, 4);
+  __ Ldg(x25, MemOperand(x29, -offset));
+  LoadDataAndSum(base, -offset);
+
+  offset = -224;
+  __ Addg(base, base, 0, 1);
+  __ Stgp(x9, x10, MemOperand(base, offset, PostIndex));
+  __ Mov(sp, base);
+  __ Ldg(x26, MemOperand(sp, -offset));
+  LoadDataAndSum(base, -offset);
+
+  __ Mov(sp, x0);
+
+  END();
+
+  if (CAN_RUN()) {
+#ifndef VIXL_INCLUDE_SIMULATOR_AARCH64
+    VIXL_UNIMPLEMENTED();
+#endif
+    RUN();
+
+    const uint64_t k = kMTETagGranuleInBytes;
+    USE(k);
+    ASSERT_EQUAL_64(((init_tag + 1) % k) << tag_lsb, x18);
+    ASSERT_EQUAL_64(((init_tag + 2) % k) << tag_lsb, x19);
+    ASSERT_EQUAL_64(((init_tag + 3) % k) << tag_lsb, x20);
+    ASSERT_EQUAL_64(((init_tag + 4) % k) << tag_lsb, x21);
+    ASSERT_EQUAL_64(((init_tag + 5) % k) << tag_lsb, x22);
+    ASSERT_EQUAL_64(((init_tag + 6) % k) << tag_lsb, x23);
+    ASSERT_EQUAL_64(((init_tag + 7) % k) << tag_lsb, x24);
+    ASSERT_EQUAL_64(((init_tag + 8) % k) << tag_lsb, x25);
+    ASSERT_EQUAL_64(((init_tag + 9) % k) << tag_lsb, x26);
+
+    // We store 1, 2, 2, 3, 3, 4, ....9, 9, 10 to memory, so the total sum of
+    // these values is 1 + (2 * (2 + 9) * 8 / 2) + 10 = 99.
+    ASSERT_EQUAL_64((99UL << tag_lsb | 99UL), x15);
+  }
+
+#ifdef VIXL_INCLUDE_SIMULATOR_AARCH64
+  simulator.Munmap(data_ptr, data_size, PROT_MTE);
+#endif
+}
 
 TEST(ldr_str_offset) {
   SETUP();
@@ -3260,7 +3738,11 @@ TEST(load_pauth_negative_test) {
   END();
 
   if (CAN_RUN()) {
+#ifdef VIXL_INCLUDE_SIMULATOR_AARCH64
     MUST_FAIL_WITH_MESSAGE(RUN(), "Failed to authenticate pointer.");
+#else
+    printf("SKIPPED: negative PAuth tests are unimplemented on hardware.");
+#endif
   }
 }
 #endif  // VIXL_NEGATIVE_TESTING
@@ -4193,6 +4675,11 @@ TEST(prfm_regoffset) {
   for (int op = 0; op < (1 << ImmPrefetchOperation_width); op++) {
     // Unallocated prefetch operations are ignored, so test all of them.
     // We have to use the Assembler directly for this.
+
+    // Prefetch operations of the form 0b11xxx are allocated to another
+    // instruction.
+    if (op >= 0b11000) continue;
+
     ExactAssemblyScope guard(&masm, inputs.GetCount() * kInstructionSize);
     CPURegList loop = inputs;
     while (!loop.IsEmpty()) {
@@ -5438,6 +5925,10 @@ TEST(rmif) {
   START();
   __ Mov(x0, 0x0123456789abcdef);
 
+  // Clear bits of `rmif` masks leave NZCV unmodified, so we need to initialise
+  // it to a known state to make the test reproducible.
+  __ Msr(NZCV, x0);
+
   // Set NZCV to 0b1011 (0xb)
   __ Rmif(x0, 0, NCVFlag);
   __ Mrs(x1, NZCV);
@@ -5483,6 +5974,9 @@ TEST(setf8_setf16) {
   __ Mov(x6, 0x10000);
   __ Mov(x7, 0x10001);
   __ Mov(x8, 0xfffffffff);
+
+  // These instruction don't modify 'C', so give it a consistent value.
+  __ Ands(xzr, xzr, 0);
 
   __ Setf8(w0);
   __ Mrs(x9, NZCV);
@@ -6765,6 +7259,9 @@ TEST(system_msr) {
   __ Cinc(x7, x7, hs);  // C
   __ Cinc(x7, x7, vc);  // !V
 
+  Register old_fpcr = x15;
+  __ Mrs(old_fpcr, FPCR);
+
   // All core FPCR fields must be writable.
   __ Mov(x8, fpcr_core);
   __ Msr(FPCR, x8);
@@ -6799,6 +7296,8 @@ TEST(system_msr) {
   __ Mrs(x10, FPCR);
 #endif
 
+  __ Msr(FPCR, old_fpcr);
+
   END();
 
   if (CAN_RUN()) {
@@ -6827,23 +7326,32 @@ TEST(system_pauth_a) {
   temps.Exclude(x16, x17);
   temps.Include(x10, x11);
 
-  // Backup stack pointer.
+  Register pointer = x21;
+  Register retry_limit = x22;
+  Label retry;
+
+  __ Mov(pointer, 0x0000000012345678);
+  __ Mov(retry_limit, 0x0000000012345678 + 32);
+
+  // Back up stack pointer.
   __ Mov(x20, sp);
 
   // Modifiers
   __ Mov(x16, 0x477d469dec0b8760);
   __ Mov(sp, 0x477d469dec0b8760);
 
+  __ Bind(&retry);
+
   // Generate PACs using the 3 system instructions.
-  __ Mov(x17, 0x0000000012345678);
+  __ Mov(x17, pointer);
   __ Pacia1716();
   __ Mov(x0, x17);
 
-  __ Mov(lr, 0x0000000012345678);
+  __ Mov(lr, pointer);
   __ Paciaz();
   __ Mov(x1, lr);
 
-  __ Mov(lr, 0x0000000012345678);
+  __ Mov(lr, pointer);
   __ Paciasp();
   __ Mov(x2, lr);
 
@@ -6878,41 +7386,51 @@ TEST(system_pauth_a) {
   __ Xpaclri();
   __ Mov(x9, lr);
 
+  // Retry on collisions.
+  __ Cmp(x0, x1);
+  __ Ccmp(pointer, x0, ZFlag, ne);
+  __ Ccmp(pointer, x1, ZFlag, ne);
+  __ Ccmp(pointer, x2, ZFlag, ne);
+  __ Ccmp(pointer, x6, ZFlag, ne);
+  __ Ccmp(pointer, x7, ZFlag, ne);
+  __ Ccmp(pointer, x8, ZFlag, ne);
+  __ Ccmp(pointer, retry_limit, ZFlag, eq);
+  __ Cinc(pointer, pointer, ne);
+  __ B(ne, &retry);
+
   // Restore stack pointer.
   __ Mov(sp, x20);
-
-  // Mask out just the PAC code bits.
-  // TODO: use Simulator::CalculatePACMask in a nice way.
-  __ And(x0, x0, 0x007f000000000000);
-  __ And(x1, x1, 0x007f000000000000);
-  __ And(x2, x2, 0x007f000000000000);
 
   END();
 
   if (CAN_RUN()) {
     RUN();
 
-    // Check PAC codes have been generated and aren't equal.
-    // NOTE: with a different ComputePAC implementation, there may be a
-    // collision.
-    ASSERT_NOT_EQUAL_64(0, x0);
-    ASSERT_NOT_EQUAL_64(0, x1);
-    ASSERT_NOT_EQUAL_64(0, x2);
+    // Check PAC codes have been generated.
+    ASSERT_NOT_EQUAL_64(pointer, x0);
+    ASSERT_NOT_EQUAL_64(pointer, x1);
+    ASSERT_NOT_EQUAL_64(pointer, x2);
     ASSERT_NOT_EQUAL_64(x0, x1);
     ASSERT_EQUAL_64(x0, x2);
 
     // Pointers correctly authenticated.
-    ASSERT_EQUAL_64(0x0000000012345678, x3);
-    ASSERT_EQUAL_64(0x0000000012345678, x4);
-    ASSERT_EQUAL_64(0x0000000012345678, x5);
+    ASSERT_EQUAL_64(pointer, x3);
+    ASSERT_EQUAL_64(pointer, x4);
+    ASSERT_EQUAL_64(pointer, x5);
 
     // Pointers corrupted after failing to authenticate.
+#ifdef VIXL_INCLUDE_SIMULATOR_AARCH64
     ASSERT_EQUAL_64(0x0020000012345678, x6);
     ASSERT_EQUAL_64(0x0020000012345678, x7);
     ASSERT_EQUAL_64(0x0020000012345678, x8);
+#else
+    ASSERT_NOT_EQUAL_64(pointer, x6);
+    ASSERT_NOT_EQUAL_64(pointer, x7);
+    ASSERT_NOT_EQUAL_64(pointer, x8);
+#endif
 
     // Pointer with code stripped.
-    ASSERT_EQUAL_64(0x0000000012345678, x9);
+    ASSERT_EQUAL_64(pointer, x9);
   }
 }
 
@@ -6927,12 +7445,21 @@ TEST(system_pauth_b) {
   temps.Exclude(x16, x17);
   temps.Include(x10, x11);
 
-  // Backup stack pointer.
+  Register pointer = x21;
+  Register retry_limit = x22;
+  Label retry;
+
+  __ Mov(pointer, 0x0000000012345678);
+  __ Mov(retry_limit, 0x0000000012345678 + 32);
+
+  // Back up stack pointer.
   __ Mov(x20, sp);
 
   // Modifiers
   __ Mov(x16, 0x477d469dec0b8760);
   __ Mov(sp, 0x477d469dec0b8760);
+
+  __ Bind(&retry);
 
   // Generate PACs using the 3 system instructions.
   __ Mov(x17, 0x0000000012345678);
@@ -6978,14 +7505,20 @@ TEST(system_pauth_b) {
   __ Xpaclri();
   __ Mov(x9, lr);
 
+  // Retry on collisions.
+  __ Cmp(x0, x1);
+  __ Ccmp(pointer, x0, ZFlag, ne);
+  __ Ccmp(pointer, x1, ZFlag, ne);
+  __ Ccmp(pointer, x2, ZFlag, ne);
+  __ Ccmp(pointer, x6, ZFlag, ne);
+  __ Ccmp(pointer, x7, ZFlag, ne);
+  __ Ccmp(pointer, x8, ZFlag, ne);
+  __ Ccmp(pointer, retry_limit, ZFlag, eq);
+  __ Cinc(pointer, pointer, ne);
+  __ B(ne, &retry);
+
   // Restore stack pointer.
   __ Mov(sp, x20);
-
-  // Mask out just the PAC code bits.
-  // TODO: use Simulator::CalculatePACMask in a nice way.
-  __ And(x0, x0, 0x007f000000000000);
-  __ And(x1, x1, 0x007f000000000000);
-  __ And(x2, x2, 0x007f000000000000);
 
   END();
 
@@ -6995,24 +7528,30 @@ TEST(system_pauth_b) {
     // Check PAC codes have been generated and aren't equal.
     // NOTE: with a different ComputePAC implementation, there may be a
     // collision.
-    ASSERT_NOT_EQUAL_64(0, x0);
-    ASSERT_NOT_EQUAL_64(0, x1);
-    ASSERT_NOT_EQUAL_64(0, x2);
+    ASSERT_NOT_EQUAL_64(pointer, x0);
+    ASSERT_NOT_EQUAL_64(pointer, x1);
+    ASSERT_NOT_EQUAL_64(pointer, x2);
     ASSERT_NOT_EQUAL_64(x0, x1);
     ASSERT_EQUAL_64(x0, x2);
 
     // Pointers correctly authenticated.
-    ASSERT_EQUAL_64(0x0000000012345678, x3);
-    ASSERT_EQUAL_64(0x0000000012345678, x4);
-    ASSERT_EQUAL_64(0x0000000012345678, x5);
+    ASSERT_EQUAL_64(pointer, x3);
+    ASSERT_EQUAL_64(pointer, x4);
+    ASSERT_EQUAL_64(pointer, x5);
 
     // Pointers corrupted after failing to authenticate.
+#ifdef VIXL_INCLUDE_SIMULATOR_AARCH64
     ASSERT_EQUAL_64(0x0040000012345678, x6);
     ASSERT_EQUAL_64(0x0040000012345678, x7);
     ASSERT_EQUAL_64(0x0040000012345678, x8);
+#else
+    ASSERT_NOT_EQUAL_64(pointer, x6);
+    ASSERT_NOT_EQUAL_64(pointer, x7);
+    ASSERT_NOT_EQUAL_64(pointer, x8);
+#endif
 
     // Pointer with code stripped.
-    ASSERT_EQUAL_64(0x0000000012345678, x9);
+    ASSERT_EQUAL_64(pointer, x9);
   }
 }
 
@@ -7097,11 +7636,12 @@ static void BtiHelper(Register ipreg) {
   __ Blr(x0);
   __ Adr(ipreg, &jump_call_target);
   __ Blr(ipreg);
-  __ Adr(lr, &done);  // Make Ret return to done label.
+  __ Mov(lr, 0);  // Zero lr so we branch to done.
   __ Br(ipreg);
   __ Bind(&call_target, EmitBTI_c);
   __ Ret();
   __ Bind(&jump_call_target, EmitBTI_jc);
+  __ Cbz(lr, &done);
   __ Ret();
   __ Bind(&done);
   END();
@@ -7109,10 +7649,15 @@ static void BtiHelper(Register ipreg) {
   if (CAN_RUN()) {
 #ifdef VIXL_INCLUDE_SIMULATOR_AARCH64
     simulator.SetGuardedPages(true);
-#else
-    VIXL_UNIMPLEMENTED();
 #endif
+    // On hardware, we'll run the test anyway, but mark it as SKIPPED until
+    // we've implemented a mechanism for marking Guarded pages.
+
     RUN();
+
+#ifndef VIXL_INCLUDE_SIMULATOR_AARCH64
+    printf("SKIPPED: marking guarded pages is unimplemented on hardware");
+#endif
   }
 }
 
@@ -7125,36 +7670,42 @@ TEST(unguarded_bti_is_nop) {
   SETUP_WITH_FEATURES(CPUFeatures::kBTI);
 
   Label start, none, c, j, jc;
+  Label jump_to_c, call_to_j;
   START();
   __ B(&start);
   __ Bind(&none, EmitBTI);
   __ Bind(&c, EmitBTI_c);
   __ Bind(&j, EmitBTI_j);
   __ Bind(&jc, EmitBTI_jc);
-  VIXL_CHECK(__ GetSizeOfCodeGeneratedSince(&none) == 4 * kInstructionSize);
+  __ Hint(BTI);
+  __ Hint(BTI_c);
+  __ Hint(BTI_j);
+  __ Hint(BTI_jc);
+  VIXL_CHECK(__ GetSizeOfCodeGeneratedSince(&none) == 8 * kInstructionSize);
+  __ Cmp(x1, 1);
+  __ B(lt, &jump_to_c);
+  __ B(eq, &call_to_j);
   __ Ret();
 
-  Label jump_to_c, call_to_j;
   __ Bind(&start);
   __ Adr(x0, &none);
-  __ Adr(lr, &jump_to_c);
+  __ Mov(x1, 0);
   __ Br(x0);
 
   __ Bind(&jump_to_c);
   __ Adr(x0, &c);
-  __ Adr(lr, &call_to_j);
+  __ Mov(x1, 1);
   __ Br(x0);
 
   __ Bind(&call_to_j);
   __ Adr(x0, &j);
+  __ Mov(x1, 2);
   __ Blr(x0);
   END();
 
   if (CAN_RUN()) {
 #ifdef VIXL_INCLUDE_SIMULATOR_AARCH64
     simulator.SetGuardedPages(false);
-#else
-    VIXL_UNIMPLEMENTED();
 #endif
     RUN();
   }
@@ -7178,12 +7729,12 @@ TEST(bti_jump_to_ip_unidentified) {
   if (CAN_RUN()) {
 #ifdef VIXL_INCLUDE_SIMULATOR_AARCH64
     simulator.SetGuardedPages(true);
-#else
-    VIXL_UNIMPLEMENTED();
-#endif
     MUST_FAIL_WITH_MESSAGE(RUN(),
                            "Executing non-BTI instruction with wrong "
                            "BType.");
+#else
+    printf("SKIPPED: marking guarded pages is unimplemented on hardware");
+#endif
   }
 }
 
@@ -7202,12 +7753,12 @@ TEST(bti_jump_to_unidentified) {
   if (CAN_RUN()) {
 #ifdef VIXL_INCLUDE_SIMULATOR_AARCH64
     simulator.SetGuardedPages(true);
-#else
-    VIXL_UNIMPLEMENTED();
-#endif
     MUST_FAIL_WITH_MESSAGE(RUN(),
                            "Executing non-BTI instruction with wrong "
                            "BType.");
+#else
+    printf("SKIPPED: marking guarded pages is unimplemented on hardware");
+#endif
   }
 }
 
@@ -7226,12 +7777,12 @@ TEST(bti_call_to_unidentified) {
   if (CAN_RUN()) {
 #ifdef VIXL_INCLUDE_SIMULATOR_AARCH64
     simulator.SetGuardedPages(true);
-#else
-    VIXL_UNIMPLEMENTED();
-#endif
     MUST_FAIL_WITH_MESSAGE(RUN(),
                            "Executing non-BTI instruction with wrong "
                            "BType.");
+#else
+    printf("SKIPPED: marking guarded pages is unimplemented on hardware");
+#endif
   }
 }
 
@@ -7251,10 +7802,10 @@ TEST(bti_jump_to_c) {
   if (CAN_RUN()) {
 #ifdef VIXL_INCLUDE_SIMULATOR_AARCH64
     simulator.SetGuardedPages(true);
-#else
-    VIXL_UNIMPLEMENTED();
-#endif
     MUST_FAIL_WITH_MESSAGE(RUN(), "Executing BTI c with wrong BType.");
+#else
+    printf("SKIPPED: marking guarded pages is unimplemented on hardware");
+#endif
   }
 }
 
@@ -7274,10 +7825,10 @@ TEST(bti_call_to_j) {
   if (CAN_RUN()) {
 #ifdef VIXL_INCLUDE_SIMULATOR_AARCH64
     simulator.SetGuardedPages(true);
-#else
-    VIXL_UNIMPLEMENTED();
-#endif
     MUST_FAIL_WITH_MESSAGE(RUN(), "Executing BTI j with wrong BType.");
+#else
+    printf("SKIPPED: marking guarded pages is unimplemented on hardware");
+#endif
   }
 }
 #endif  // VIXL_NEGATIVE_TESTING
@@ -7302,12 +7853,17 @@ TEST(fall_through_bti) {
   if (CAN_RUN()) {
 #ifdef VIXL_INCLUDE_SIMULATOR_AARCH64
     simulator.SetGuardedPages(true);
-#else
-    VIXL_UNIMPLEMENTED();
 #endif
+    // On hardware, we'll run the test anyway, but mark it as SKIPPED until
+    // we've implemented a mechanism for marking Guarded pages.
+
     RUN();
 
     ASSERT_EQUAL_64(4, x0);
+
+#ifndef VIXL_INCLUDE_SIMULATOR_AARCH64
+    printf("SKIPPED: marking guarded pages is unimplemented on hardware");
+#endif
   }
 }
 
@@ -9145,7 +9701,7 @@ TEST(log) {
 
 
 TEST(blr_lr) {
-  // A simple test to check that the simulator correcty handle "blr lr".
+  // A simple test to check that the simulator correctly handle "blr lr".
   SETUP();
 
   START();
@@ -12140,6 +12696,26 @@ TEST(system_dccvadp) {
   }
 }
 
+TEST(system_dc_mte) {
+  SETUP_WITH_FEATURES(CPUFeatures::kMTE);
+  const char* msg = "DC MTE test!";
+  uintptr_t msg_addr = reinterpret_cast<uintptr_t>(msg);
+
+  START();
+  __ Mov(x20, msg_addr);
+  __ Dc(CGVAC, x20);
+  __ Dc(CGDVAC, x20);
+  __ Dc(CGVAP, x20);
+  __ Dc(CGDVAP, x20);
+  __ Dc(CIGVAC, x20);
+  __ Dc(CIGDVAC, x20);
+  END();
+
+  if (CAN_RUN()) {
+    RUN();
+    ASSERT_EQUAL_64(msg_addr, x20);
+  }
+}
 
 // We currently disable tests for CRC32 instructions when running natively.
 // Support for this family of instruction is optional, and so native platforms
@@ -12940,6 +13516,76 @@ TEST(collision_literal_veneer_pools) {
   END();
 }
 
+static void VeneerBackwardBranchHelper(ImmBranchType type, int limit) {
+  SETUP();
+  START();
+
+  // This is a code generation test. The code generated is not executed.
+
+  __ Mov(x0, 1);
+
+  // Non-veneer case: generate 'limit' instructions, plus the branch itself.
+  Label start0;
+  __ Bind(&start0);
+  for (int i = 0; i < limit; i++) {
+    __ Nop();
+  }
+  switch (type) {
+    case CompareBranchType:
+      __ Cbz(x0, &start0);
+      break;
+    case TestBranchType:
+      __ Tbz(x0, 0, &start0);
+      break;
+    default:
+      VIXL_ASSERT(type == CondBranchType);
+      __ B(eq, &start0);
+  }
+  VIXL_CHECK(masm.GetSizeOfCodeGeneratedSince(&start0) ==
+             ((limit + 1) * kInstructionSize));
+
+  // Veneer case: As above, plus one extra nop and a branch for the veneer; we
+  // expect a total of limit + 3 instructions.
+  //
+  //  start1:
+  //    nop x (limit + 1)
+  //    tbnz skip_veneer
+  //    b start1
+  //  skip_veneer:
+  //
+  Label start1;
+  __ Bind(&start1);
+  for (int i = 0; i < limit; i++) {
+    __ Nop();
+  }
+  __ Nop();  // One extra instruction to exceed branch range.
+  switch (type) {
+    case CompareBranchType:
+      __ Cbz(x0, &start0);
+      break;
+    case TestBranchType:
+      __ Tbz(x0, 0, &start0);
+      break;
+    default:
+      VIXL_ASSERT(type == CondBranchType);
+      __ B(eq, &start0);
+  }
+  VIXL_CHECK(masm.GetSizeOfCodeGeneratedSince(&start1) ==
+             ((limit + 3) * kInstructionSize));
+
+  END();
+  DISASSEMBLE();
+}
+
+TEST(veneer_backward_tbz) { VeneerBackwardBranchHelper(TestBranchType, 8192); }
+
+TEST(veneer_backward_cbz) {
+  VeneerBackwardBranchHelper(CompareBranchType, 262144);
+}
+
+TEST(veneer_backward_bcond) {
+  VeneerBackwardBranchHelper(CondBranchType, 262144);
+}
 
 TEST(ldr_literal_explicit) {
   SETUP();
@@ -13242,6 +13888,8 @@ double runtime_call_two_arguments_on_stack(int64_t arg1 __attribute__((unused)),
 
 void runtime_call_store_at_address(int64_t* address) { *address = 0xf00d; }
 
+int32_t runtime_call_no_args() { return 1; }
+
 enum RuntimeCallTestEnum { Enum0 };
 
 RuntimeCallTestEnum runtime_call_enum(RuntimeCallTestEnum e) { return e; }
@@ -13362,6 +14010,10 @@ TEST(runtime_calls) {
   __ Mov(x0, reinterpret_cast<uint64_t>(&value));
   __ CallRuntime(runtime_call_store_at_address);
 
+  __ Mov(w0, 0);
+  __ CallRuntime(runtime_call_no_args);
+  __ Mov(w25, w0);
+
   END();
 
 #if defined(VIXL_HAS_SIMULATED_RUNTIME_CALL_SUPPORT) || \
@@ -13377,9 +14029,79 @@ TEST(runtime_calls) {
     ASSERT_EQUAL_64(0, x22);
     ASSERT_EQUAL_32(124, w23);
     ASSERT_EQUAL_64(0, x24);
+    ASSERT_EQUAL_32(1, w25);
   }
 #endif  // #if defined(VIXL_HAS_SIMULATED_RUNTIME_CALL_SUPPORT) || ...
 }
+
+#ifdef VIXL_INCLUDE_SIMULATOR_AARCH64
+void void_func() {}
+uint32_t uint32_func() { return 2; }
+void void_param_func(uint32_t x) { USE(x); }
+uint32_t uint32_param_func(uint32_t x) { return ++x; }
+
+void void_placeholder() {}
+uint32_t uint32_placeholder() { return 4; }
+void void_param_placeholder(uint32_t x) { USE(x); }
+uint32_t uint32_param_placeholder(uint32_t x) { return ++x; }
+
+#define DO_TEST_BRANCH_INTERCEPTION(func)        \
+  __ Mov(x16, reinterpret_cast<uint64_t>(func)); \
+  __ Blr(x16);
+
+TEST(branch_interception) {
+  SETUP();
+  START();
+
+  // Test default branch interception, i.e: do a runtime call to the function.
+  DO_TEST_BRANCH_INTERCEPTION(void_func);
+  DO_TEST_BRANCH_INTERCEPTION(uint32_func);
+  __ Mov(w20, w0);
+  DO_TEST_BRANCH_INTERCEPTION(void_param_func);
+  __ Mov(w0, 2);
+  DO_TEST_BRANCH_INTERCEPTION(uint32_param_func);
+  __ Mov(w21, w0);
+
+  // Test interceptions with callbacks.
+  DO_TEST_BRANCH_INTERCEPTION(void_placeholder);
+  __ Mov(w22, w0);
+  DO_TEST_BRANCH_INTERCEPTION(uint32_placeholder);
+  __ Mov(w23, w0);
+  __ Mov(w0, 4);
+  DO_TEST_BRANCH_INTERCEPTION(uint32_placeholder);
+  __ Mov(w24, w0);
+  DO_TEST_BRANCH_INTERCEPTION(uint32_placeholder);
+  __ Mov(w25, w0);
+
+  END();
+
+  simulator.RegisterBranchInterception(void_func);
+  simulator.RegisterBranchInterception(uint32_func);
+  simulator.RegisterBranchInterception(void_param_func);
+  simulator.RegisterBranchInterception(uint32_param_func);
+
+  auto callback = [&simulator](uint64_t original_target) {
+    USE(original_target);
+    simulator.WriteWRegister(0, 1);
+  };
+
+  simulator.RegisterBranchInterception(void_placeholder, callback);
+  simulator.RegisterBranchInterception(uint32_placeholder, callback);
+  simulator.RegisterBranchInterception(void_param_placeholder, callback);
+  simulator.RegisterBranchInterception(uint32_param_placeholder, callback);
+
+  if (CAN_RUN()) {
+    RUN();
+
+    ASSERT_EQUAL_32(2, w20);
+    ASSERT_EQUAL_32(3, w21);
+    ASSERT_EQUAL_32(1, w22);
+    ASSERT_EQUAL_32(1, w23);
+    ASSERT_EQUAL_32(1, w24);
+    ASSERT_EQUAL_32(1, w25);
+  }
+}
+#endif  // #ifdef VIXL_INCLUDE_SIMULATOR_AARCH64
 #endif  // #ifdef VIXL_HAS_MACROASSEMBLER_RUNTIME_CALL_SUPPORT
 
 
@@ -13414,6 +14136,1244 @@ TEST(nop) {
   VIXL_CHECK(masm.GetSizeOfCodeGeneratedSince(&start) >= kInstructionSize);
 
   masm.FinalizeCode();
+}
+
+
+TEST(mte_addg_subg) {
+  SETUP_WITH_FEATURES(CPUFeatures::kMTE);
+
+  START();
+  __ Mov(x0, 0x5555000055555555);
+
+  // Add/subtract an address offset, changing tag each time.
+  __ Addg(x1, x0, 16, 2);
+  __ Subg(x2, x1, 16, 1);
+
+  // Add/subtract address offsets, keep tag.
+  __ Addg(x3, x0, 1008, 0);
+  __ Subg(x4, x3, 1008, 0);
+
+  // Change tag only. Check wraparound.
+  __ Addg(x5, x0, 0, 15);
+  __ Subg(x6, x0, 0, 14);
+
+  // Do nothing.
+  __ Addg(x7, x0, 0, 0);
+  __ Subg(x8, x0, 0, 0);
+
+  // Use stack pointer as source/destination.
+  __ Mov(x20, sp);  // Store original sp.
+
+  __ Subg(sp, sp, 32, 0);  // Claim 32 bytes.
+  __ Sub(x9, sp, x20);     // Subtract original sp and store difference.
+
+  __ Mov(sp, x20);  // Restore original sp.
+  __ Claim(32);
+  __ Addg(sp, sp, 32, 0);  // Drop 32 bytes.
+  __ Sub(x10, sp, x20);    // Subtract original sp and store difference.
+
+  __ Mov(sp, x20);        // Restore sp (should be no-op)
+  __ Addg(sp, sp, 0, 1);  // Tag the sp.
+  __ Sub(x11, sp, x20);  // Subtract original sp and store for later comparison.
+  __ Mov(sp, x20);       // Restore sp.
+
+  END();
+
+  if (CAN_RUN()) {
+    RUN();
+
+    ASSERT_EQUAL_64(0x5755000055555565, x1);
+    ASSERT_EQUAL_64(0x5855000055555555, x2);
+    ASSERT_EQUAL_64(0x5555000055555945, x3);
+    ASSERT_EQUAL_64(0x5555000055555555, x4);
+    ASSERT_EQUAL_64(0x5455000055555555, x5);
+    ASSERT_EQUAL_64(0x5355000055555555, x6);
+    ASSERT_EQUAL_64(0x5555000055555555, x7);
+    ASSERT_EQUAL_64(0x5555000055555555, x8);
+    ASSERT_EQUAL_64(-32, x9);
+    ASSERT_EQUAL_64(0, x10);
+    ASSERT_EQUAL_64(UINT64_C(1) << 56, x11);
+  }
+}
+
+TEST(mte_subp) {
+  SETUP_WITH_FEATURES(CPUFeatures::kMTE);
+
+  START();
+  __ Mov(x0, 0x5555555555555555);
+  __ Mov(x1, -42);
+
+  // Test subp with equivalent sbfx/sub(s) operations.
+  __ Sbfx(x10, x0, 0, 56);
+  __ Sbfx(x11, x1, 0, 56);
+
+  __ Subp(x4, x0, x1);
+  __ Sub(x5, x10, x11);
+
+  __ Subp(x6, x1, x0);
+  __ Sub(x7, x11, x10);
+
+  __ Subps(x8, x0, x1);
+  __ Mrs(x18, NZCV);
+  __ Subs(x9, x10, x11);
+  __ Mrs(x19, NZCV);
+
+  __ Cmpp(x1, x0);
+  __ Mrs(x20, NZCV);
+  __ Cmp(x11, x10);
+  __ Mrs(x21, NZCV);
+
+  // Test equal pointers with mismatched tags compare equal and produce a zero
+  // difference with subps.
+  __ Mov(x2, 0x20);  // Exclude tag 5.
+  __ Irg(x3, x0, x2);
+  __ Subps(x22, x0, x3);
+
+  END();
+
+  if (CAN_RUN()) {
+    RUN();
+
+    ASSERT_EQUAL_64(x5, x4);
+    ASSERT_EQUAL_64(x7, x6);
+    ASSERT_EQUAL_64(x9, x8);
+    ASSERT_EQUAL_64(x19, x18);
+    ASSERT_EQUAL_64(x20, x21);
+    ASSERT_EQUAL_64(0, x22);
+    ASSERT_EQUAL_NZCV(ZCFlag);
+  }
+}
+
+TEST(mte_gmi) {
+  SETUP_WITH_FEATURES(CPUFeatures::kMTE);
+
+  START();
+  __ Mov(x0, 0xaaaa);
+  __ Mov(x20, 0x12345678);
+
+  __ Gmi(x0, x20, x0);  // Add mask bit 0.
+  __ Addg(x20, x20, 0, 1);
+  __ Gmi(x1, x20, x0);  // No effect.
+  __ Addg(x20, x20, 0, 1);
+  __ Gmi(x2, x20, x1);  // Add mask bit 2.
+  __ Addg(x20, x20, 0, 1);
+  __ Gmi(x3, x20, x2);  // No effect.
+  __ Addg(x20, x20, 0, 1);
+  __ Gmi(x4, x20, x3);  // Add mask bit 4.
+  __ Addg(x20, x20, 0, 1);
+  __ Gmi(x5, x20, x4);  // No effect.
+  __ Addg(x20, x20, 0, 9);
+  __ Gmi(x6, x20, x5);   // Add mask bit 14.
+  __ Gmi(x7, x20, xzr);  // Only mask bit 14.
+  END();
+
+  if (CAN_RUN()) {
+    RUN();
+
+    ASSERT_EQUAL_64(0xaaab, x0);
+    ASSERT_EQUAL_64(0xaaab, x1);
+    ASSERT_EQUAL_64(0xaaaf, x2);
+    ASSERT_EQUAL_64(0xaaaf, x3);
+    ASSERT_EQUAL_64(0xaabf, x4);
+    ASSERT_EQUAL_64(0xaabf, x5);
+    ASSERT_EQUAL_64(0xeabf, x6);
+    ASSERT_EQUAL_64(0x4000, x7);
+  }
+}
+
+TEST(mte_irg) {
+  SETUP_WITH_FEATURES(CPUFeatures::kMTE);
+
+  START();
+  __ Mov(x10, 8);
+  __ Mov(x0, 0x5555555555555555);
+  // Insert a random tag repeatedly. If the loop doesn't exit in the expected
+  // way, it's statistically likely that a random tag was never inserted.
+  Label loop, failed, done;
+  __ Bind(&loop);
+  __ Irg(x1, x0);
+  __ Sub(x10, x10, 1);
+  __ Cbz(x10, &failed);  // Exit if loop count exceeded.
+  __ Cmp(x1, 0x5555555555555555);
+  __ B(eq, &loop);  // Loop if the tag hasn't changed.
+
+  // Check non-tag bits have not changed.
+  __ Bic(x1, x1, 0x0f00000000000000);
+  __ Subs(x1, x1, 0x5055555555555555);
+  __ B(&done);
+
+  __ Bind(&failed);
+  __ Mov(x1, 1);
+
+  __ Bind(&done);
+
+  // Insert random tags, excluding oddly-numbered tags, and set a bit in a
+  // result register for each tag used.
+  // After 128 rounds, it's statistically likely that all even bits in the
+  // least-significant half word will be set.
+  __ Mov(x3, 0);
+  __ Mov(x4, 1);
+  __ Mov(x10, 128);
+  __ Mov(x11, 0xaaaa);
+
+  Label loop2;
+  __ Bind(&loop2);
+  __ Irg(x2, x1, x11);
+  __ Lsr(x2, x2, 56);
+  __ Lsl(x2, x4, x2);
+  __ Orr(x3, x3, x2);
+  __ Subs(x10, x10, 1);
+  __ B(ne, &loop2);
+  __ Mov(x2, x3);
+
+  // Check that excluding all tags results in zero tag insertion.
+  __ Mov(x3, 0xffffffffffffffff);
+  __ Irg(x3, x3, x3);
+  END();
+
+  if (CAN_RUN()) {
+    RUN();
+
+    ASSERT_EQUAL_64(0, x1);
+    ASSERT_EQUAL_64(0x5555, x2);
+    ASSERT_EQUAL_64(0xf0ffffffffffffff, x3);
+  }
+}
+
+TEST(mops_set) {
+  SETUP_WITH_FEATURES(CPUFeatures::kMOPS);
+
+  uint8_t dst[16];
+  memset(dst, 0x55, ArrayLength(dst));
+  uintptr_t dst_addr = reinterpret_cast<uintptr_t>(dst);
+
+  START();
+  __ Mov(x0, dst_addr);
+  __ Add(x1, x0, 1);
+  __ Mov(x2, 13);
+  __ Mov(x3, 0x1234aa);
+
+  // Set 13 bytes dst[1] onwards to 0xaa.
+  __ Setp(x1, x2, x3);
+  __ Setm(x1, x2, x3);
+  __ Sete(x1, x2, x3);
+  __ Mrs(x20, NZCV);
+
+  // x2 is now zero, so this should do nothing.
+  __ Setp(x1, x2, x3);
+  __ Setm(x1, x2, x3);
+  __ Sete(x1, x2, x3);
+  __ Mrs(x21, NZCV);
+
+  // Set dst[15] to zero using the masm helper.
+  __ Add(x1, x0, 15);
+  __ Mov(x2, 1);
+  __ Set(x1, x2, xzr);
+  __ Mrs(x22, NZCV);
+
+  // Load dst for comparison.
+  __ Ldp(x10, x11, MemOperand(x0));
+  END();
+
+  if (CAN_RUN()) {
+    // Permitted results:
+    //            NZCV    Xd                Xn
+    //  Option A: ....    end of buffer     0
+    //  Option B: ..C.    end of buffer     0
+
+    std::vector<uint64_t> allowed_flags = {NoFlag, CFlag};
+
+    RUN();
+    ASSERT_EQUAL_64(allowed_flags, x20);
+    ASSERT_EQUAL_64(allowed_flags, x21);
+    ASSERT_EQUAL_64(allowed_flags, x22);
+    ASSERT_EQUAL_64(dst_addr + 16, x1);
+    ASSERT_EQUAL_64(0, x2);
+    ASSERT_EQUAL_64(0x1234aa, x3);
+    ASSERT_EQUAL_64(0xaaaa'aaaa'aaaa'aa55, x10);
+    ASSERT_EQUAL_64(0x0055'aaaa'aaaa'aaaa, x11);
+  }
+}
+
+TEST(mops_setn) {
+  SETUP_WITH_FEATURES(CPUFeatures::kMOPS);
+
+  // In simulation, non-temporal set is handled by the same code as normal set,
+  // so only a basic test is required beyond that already provided above.
+
+  uint8_t dst[16] = {0x55};
+  uintptr_t dst_addr = reinterpret_cast<uintptr_t>(dst);
+
+  START();
+  __ Mov(x0, dst_addr);
+  __ Mov(x1, x0);
+  __ Mov(x2, 16);
+  __ Mov(x3, 0x42);
+  __ Setn(x1, x2, x3);
+  __ Mrs(x20, NZCV);
+  __ Ldp(x10, x11, MemOperand(x0));
+  END();
+
+  if (CAN_RUN()) {
+    // Permitted results:
+    //            NZCV    Xd                Xn
+    //  Option A: ....    end of buffer     0
+    //  Option B: ..C.    end of buffer     0
+
+    std::vector<uint64_t> allowed_flags = {NoFlag, CFlag};
+
+    RUN();
+    ASSERT_EQUAL_64(allowed_flags, x20);
+    ASSERT_EQUAL_64(dst_addr + 16, x1);
+    ASSERT_EQUAL_64(0, x2);
+    ASSERT_EQUAL_64(0x42, x3);
+    ASSERT_EQUAL_64(0x4242'4242'4242'4242, x10);
+    ASSERT_EQUAL_64(0x4242'4242'4242'4242, x11);
+  }
+}
+
+TEST(mops_setg) {
+  SETUP_WITH_FEATURES(CPUFeatures::kMOPS, CPUFeatures::kMTE);
+
+  uint8_t* dst = nullptr;
+#ifdef VIXL_INCLUDE_SIMULATOR_AARCH64
+  const int dst_size = 32;
+  dst = reinterpret_cast<uint8_t*>(
+      simulator.Mmap(NULL,
+                     dst_size * sizeof(uint8_t),
+                     PROT_READ | PROT_WRITE | PROT_MTE,
+                     MAP_PRIVATE | MAP_ANONYMOUS,
+                     -1,
+                     0));
+
+  VIXL_ASSERT(dst != nullptr);
+  uint8_t* untagged_ptr = AddressUntag(dst);
+  memset(untagged_ptr, 0xc9, dst_size);
+#else
+// TODO: Port the memory allocation to work on MTE supported platform natively.
+// Note that `CAN_RUN` prevents running in MTE-unsupported environments.
+#endif
+
+  uintptr_t dst_addr = reinterpret_cast<uintptr_t>(dst);
+  uint64_t tag_mask = 0xf0ff'ffff'ffff'ffff;
+
+  START();
+  __ Mov(x0, dst_addr);
+  __ Gmi(x2, x0, xzr);
+  __ Irg(x1, x0, x2);  // Choose new tag for setg destination.
+  __ Mov(x2, 16);
+  __ Mov(x3, 0x42);
+  __ Setg(x1, x2, x3);
+  __ Mrs(x20, NZCV);
+
+  __ Ubfx(x4, x1, 56, 4);  // Extract new tag.
+  __ Bfi(x0, x4, 56, 4);   // Tag dst_addr so set region can be loaded.
+  __ Ldp(x10, x11, MemOperand(x0));
+
+  __ Mov(x0, dst_addr);
+  __ Ldp(x12, x13, MemOperand(x0, 16));  // Unset region has original tag.
+
+  __ And(x1, x1, tag_mask);  // Strip tag for repeatable checks.
+  END();
+
+  if (CAN_RUN()) {
+    // Permitted results:
+    //            NZCV    Xd                Xn
+    //  Option A: ....    end of buffer     0
+    //  Option B: ..C.    end of buffer     0
+
+    std::vector<uint64_t> allowed_flags = {NoFlag, CFlag};
+
+    RUN();
+    ASSERT_EQUAL_64(allowed_flags, x20);
+    ASSERT_EQUAL_64((dst_addr & tag_mask) + 16, x1);
+    ASSERT_EQUAL_64(0, x2);
+    ASSERT_EQUAL_64(0x42, x3);
+    ASSERT_EQUAL_64(0x4242'4242'4242'4242, x10);
+    ASSERT_EQUAL_64(0x4242'4242'4242'4242, x11);
+    ASSERT_EQUAL_64(0xc9c9'c9c9'c9c9'c9c9, x12);
+    ASSERT_EQUAL_64(0xc9c9'c9c9'c9c9'c9c9, x13);
+  }
+
+#ifdef VIXL_INCLUDE_SIMULATOR_AARCH64
+  simulator.Munmap(dst, dst_size, PROT_MTE);
+#endif
+}
+
+TEST(mops_cpy) {
+  SETUP_WITH_FEATURES(CPUFeatures::kMOPS);
+
+  uint8_t buf[16];
+  uintptr_t buf_addr = reinterpret_cast<uintptr_t>(buf);
+
+  for (unsigned i = 0; i < ArrayLength(buf); i++) {
+    buf[i] = i;
+  }
+
+  START();
+  __ Mov(x0, buf_addr);
+
+  // Copy first eight bytes into second eight.
+  __ Mov(x1, x0);     // src = &buf[0]
+  __ Add(x2, x0, 8);  // dst = &buf[8]
+  __ Mov(x3, 8);      // count = 8
+  __ Cpyp(x2, x1, x3);
+  __ Cpym(x2, x1, x3);
+  __ Cpye(x2, x1, x3);
+  __ Ldp(x10, x11, MemOperand(x0));
+  __ Mrs(x20, NZCV);
+
+  // Copy first eight bytes to overlapping offset, forcing backwards copy.
+  __ Mov(x4, x0);     // src = &buf[0]
+  __ Add(x5, x0, 4);  // dst = &buf[4]
+  __ Mov(x6, 8);      // count = 8
+  __ Cpy(x5, x4, x6);
+  __ Ldp(x12, x13, MemOperand(x0));
+  __ Mrs(x21, NZCV);
+
+  // Copy last eight bytes to overlapping offset, forcing forwards copy.
+  __ Add(x7, x0, 8);  // src = &buf[8]
+  __ Add(x8, x0, 6);  // dst = &buf[6]
+  __ Mov(x9, 8);      // count = 8
+  __ Cpy(x8, x7, x9);
+  __ Ldp(x14, x15, MemOperand(x0));
+  __ Mrs(x22, NZCV);
+  END();
+
+  if (CAN_RUN()) {
+    // Permitted results:
+    //                        NZCV    Xs/Xd               Xn
+    //  Option A (forwards) : ....    ends of buffers     0
+    //  Option A (backwards): ....    starts of buffers   0
+    //  Option B (forwards) : ..C.    ends of buffers     0
+    //  Option B (backwards): N.C.    starts of buffers   0
+
+    std::vector<uint64_t> allowed_backwards_flags = {NoFlag, NCFlag};
+    std::vector<uint64_t> allowed_forwards_flags = {NoFlag, CFlag};
+
+    RUN();
+    // IMPLEMENTATION DEFINED direction
+    if (static_cast<uintptr_t>(core.xreg(2)) > buf_addr) {
+      // Forwards
+      ASSERT_EQUAL_64(buf_addr + 8, x1);
+      ASSERT_EQUAL_64(buf_addr + 16, x2);
+      ASSERT_EQUAL_64(allowed_forwards_flags, x20);
+    } else {
+      // Backwards
+      ASSERT_EQUAL_64(buf_addr, x1);
+      ASSERT_EQUAL_64(buf_addr + 8, x2);
+      ASSERT_EQUAL_64(allowed_backwards_flags, x20);
+    }
+    ASSERT_EQUAL_64(0, x3);  // Xn
+    ASSERT_EQUAL_64(0x0706'0504'0302'0100, x10);
+    ASSERT_EQUAL_64(0x0706'0504'0302'0100, x11);
+
+    ASSERT_EQUAL_64(buf_addr, x4);      // Xs
+    ASSERT_EQUAL_64(buf_addr + 4, x5);  // Xd
+    ASSERT_EQUAL_64(0, x6);             // Xn
+    ASSERT_EQUAL_64(0x0302'0100'0302'0100, x12);
+    ASSERT_EQUAL_64(0x0706'0504'0706'0504, x13);
+    ASSERT_EQUAL_64(allowed_backwards_flags, x21);
+
+    ASSERT_EQUAL_64(buf_addr + 16, x7);  // Xs
+    ASSERT_EQUAL_64(buf_addr + 14, x8);  // Xd
+    ASSERT_EQUAL_64(0, x9);              // Xn
+    ASSERT_EQUAL_64(0x0504'0100'0302'0100, x14);
+    ASSERT_EQUAL_64(0x0706'0706'0504'0706, x15);
+    ASSERT_EQUAL_64(allowed_forwards_flags, x22);
+  }
+}
+
+TEST(mops_cpyn) {
+  SETUP_WITH_FEATURES(CPUFeatures::kMOPS);
+
+  // In simulation, non-temporal cpy is handled by the same code as normal cpy,
+  // so only a basic test is required beyond that already provided above.
+
+  uint8_t buf[16];
+  uintptr_t buf_addr = reinterpret_cast<uintptr_t>(buf);
+
+  for (unsigned i = 0; i < ArrayLength(buf); i++) {
+    buf[i] = i;
+  }
+
+  START();
+  __ Mov(x0, buf_addr);
+
+  __ Add(x1, x0, 1);  // src = &buf[1]
+  __ Mov(x2, x0);     // dst = &buf[0]
+  __ Mov(x3, 15);     // count = 15
+  __ Cpyn(x2, x1, x3);
+  __ Ldp(x10, x11, MemOperand(x0));
+  __ Mrs(x20, NZCV);
+
+  __ Add(x4, x0, 1);  // src = &buf[1]
+  __ Mov(x5, x0);     // dst = &buf[0]
+  __ Mov(x6, 15);     // count = 15
+  __ Cpyrn(x5, x4, x6);
+  __ Ldp(x12, x13, MemOperand(x0));
+  __ Mrs(x21, NZCV);
+
+  __ Add(x7, x0, 1);  // src = &buf[1]
+  __ Mov(x8, x0);     // dst = &buf[0]
+  __ Mov(x9, 15);     // count = 15
+  __ Cpywn(x8, x7, x9);
+  __ Ldp(x14, x15, MemOperand(x0));
+  __ Mrs(x22, NZCV);
+  END();
+
+  if (CAN_RUN()) {
+    // Permitted results:
+    //                        NZCV    Xs/Xd               Xn
+    //  Option A (forwards) : ....    ends of buffers     0
+    //  Option A (backwards): ....    starts of buffers   0
+    //  Option B (forwards) : ..C.    ends of buffers     0
+    //  Option B (backwards): N.C.    starts of buffers   0
+    //
+    // All cases overlap to force a forwards copy.
+
+    std::vector<uint64_t> allowed_forwards_flags = {NoFlag, CFlag};
+
+    RUN();
+    ASSERT_EQUAL_64(buf_addr + 16, x1);  // Xs
+    ASSERT_EQUAL_64(buf_addr + 15, x2);  // Xd
+    ASSERT_EQUAL_64(0, x3);              // Xn
+    ASSERT_EQUAL_64(allowed_forwards_flags, x20);
+    ASSERT_EQUAL_64(0x0807'0605'0403'0201, x10);
+    ASSERT_EQUAL_64(0x0f0f'0e0d'0c0b'0a09, x11);
+
+    ASSERT_EQUAL_64(buf_addr + 16, x4);  // Xs
+    ASSERT_EQUAL_64(buf_addr + 15, x5);  // Xd
+    ASSERT_EQUAL_64(0, x6);              // Xn
+    ASSERT_EQUAL_64(allowed_forwards_flags, x21);
+    ASSERT_EQUAL_64(0x0908'0706'0504'0302, x12);
+    ASSERT_EQUAL_64(0x0f0f'0f0e'0d0c'0b0a, x13);
+
+    ASSERT_EQUAL_64(buf_addr + 16, x7);  // Xs
+    ASSERT_EQUAL_64(buf_addr + 15, x8);  // Xd
+    ASSERT_EQUAL_64(0, x9);              // Xn
+    ASSERT_EQUAL_64(allowed_forwards_flags, x22);
+    ASSERT_EQUAL_64(0x0a09'0807'0605'0403, x14);
+    ASSERT_EQUAL_64(0x0f0f'0f0f'0e0d'0c0b, x15);
+  }
+}
+
+TEST(mops_cpyf) {
+  SETUP_WITH_FEATURES(CPUFeatures::kMOPS);
+
+  uint8_t buf[16];
+  uintptr_t buf_addr = reinterpret_cast<uintptr_t>(buf);
+
+  for (unsigned i = 0; i < ArrayLength(buf); i++) {
+    buf[i] = i;
+  }
+
+  // As `mops_cpy`, but `cpyf` always copies forwards, so is only useful for
+  // non-overlapping buffers, or those where the source address is greater than
+  // the destination address.
+
+  START();
+  __ Mov(x0, buf_addr);
+
+  // Copy first eight bytes into second eight, without overlap.
+  __ Mov(x1, x0);     // src = &buf[0]
+  __ Add(x2, x0, 8);  // dst = &buf[8]
+  __ Mov(x3, 8);      // count = 8
+  __ Cpyfp(x2, x1, x3);
+  __ Cpyfm(x2, x1, x3);
+  __ Cpyfe(x2, x1, x3);
+  __ Ldp(x10, x11, MemOperand(x0));
+  __ Mrs(x20, NZCV);
+
+  // Copy last eight bytes to overlapping offset where src < dst.
+  __ Add(x4, x0, 8);  // src = &buf[8]
+  __ Add(x5, x0, 6);  // dst = &buf[6]
+  __ Mov(x6, 8);      // count = 8
+  __ Cpyf(x5, x4, x6);
+  __ Ldp(x12, x13, MemOperand(x0));
+  __ Mrs(x21, NZCV);
+
+  // Copy first eight bytes to overlapping offset where src > dst.
+  __ Mov(x7, x0);     // src = &buf[0]
+  __ Add(x8, x0, 4);  // dst = &buf[4]
+  __ Mov(x9, 8);      // count = 8
+  __ Cpyf(x8, x7, x9);
+  // The only testable result is the first and last four bytes, which are not
+  // written at all.
+  __ Ldr(w14, MemOperand(x0));
+  __ Ldr(w15, MemOperand(x0, 12));
+  __ Mrs(x22, NZCV);
+
+  END();
+
+  if (CAN_RUN()) {
+    // Permitted results:
+    //            NZCV    Xs/Xd               Xn
+    //  Option A: ....    ends of buffers     0
+    //  Option B: ..C.    ends of buffers     0
+
+    std::vector<uint64_t> allowed_forwards_flags = {NoFlag, CFlag};
+
+    RUN();
+
+    // No overlap.
+    ASSERT_EQUAL_64(buf_addr + 8, x1);   // Xs
+    ASSERT_EQUAL_64(buf_addr + 16, x2);  // Xd
+    ASSERT_EQUAL_64(0, x3);              // Xn
+    ASSERT_EQUAL_64(allowed_forwards_flags, x20);
+    ASSERT_EQUAL_64(0x0706'0504'0302'0100, x10);
+    ASSERT_EQUAL_64(0x0706'0504'0302'0100, x11);
+
+    // Overlap, src > dst.
+    ASSERT_EQUAL_64(buf_addr + 16, x4);  // Xs
+    ASSERT_EQUAL_64(buf_addr + 14, x5);  // Xd
+    ASSERT_EQUAL_64(0, x6);              // Xn
+    ASSERT_EQUAL_64(0x0100'0504'0302'0100, x12);
+    ASSERT_EQUAL_64(0x0706'0706'0504'0302, x13);
+    ASSERT_EQUAL_64(allowed_forwards_flags, x21);
+
+    // Overlap, src < dst.
+    ASSERT_EQUAL_64(buf_addr + 8, x7);   // Xs
+    ASSERT_EQUAL_64(buf_addr + 12, x8);  // Xd
+    ASSERT_EQUAL_64(0, x9);              // Xn
+    // We can only reliably test that the operation didn't write outside the
+    // specified region.
+    ASSERT_EQUAL_32(0x0302'0100, w14);
+    ASSERT_EQUAL_32(0x0706'0706, w15);
+    ASSERT_EQUAL_64(allowed_forwards_flags, x22);
+  }
+}
+
+TEST(mops_cpyfn) {
+  SETUP_WITH_FEATURES(CPUFeatures::kMOPS);
+
+  // In simulation, non-temporal cpy is handled by the same code as normal cpy,
+  // so only a basic test is required beyond that already provided above.
+
+  uint8_t buf[16];
+  uintptr_t buf_addr = reinterpret_cast<uintptr_t>(buf);
+
+  for (unsigned i = 0; i < ArrayLength(buf); i++) {
+    buf[i] = i;
+  }
+
+  START();
+  __ Mov(x0, buf_addr);
+
+  __ Add(x1, x0, 1);  // src = &buf[1]
+  __ Mov(x2, x0);     // dst = &buf[0]
+  __ Mov(x3, 15);     // count = 15
+  __ Cpyfn(x2, x1, x3);
+  __ Ldp(x10, x11, MemOperand(x0));
+  __ Mrs(x20, NZCV);
+
+  __ Add(x4, x0, 1);  // src = &buf[1]
+  __ Mov(x5, x0);     // dst = &buf[0]
+  __ Mov(x6, 15);     // count = 15
+  __ Cpyfrn(x5, x4, x6);
+  __ Ldp(x12, x13, MemOperand(x0));
+  __ Mrs(x21, NZCV);
+
+  __ Add(x7, x0, 1);  // src = &buf[1]
+  __ Mov(x8, x0);     // dst = &buf[0]
+  __ Mov(x9, 15);     // count = 15
+  __ Cpyfwn(x8, x7, x9);
+  __ Ldp(x14, x15, MemOperand(x0));
+  __ Mrs(x22, NZCV);
+  END();
+
+  if (CAN_RUN()) {
+    // Permitted results:
+    //            NZCV    Xs/Xd               Xn
+    //  Option A: ....    ends of buffers     0
+    //  Option B: ..C.    ends of buffers     0
+
+    std::vector<uint64_t> allowed_flags = {NoFlag, CFlag};
+
+    RUN();
+    ASSERT_EQUAL_64(buf_addr + 16, x1);  // Xs
+    ASSERT_EQUAL_64(buf_addr + 15, x2);  // Xd
+    ASSERT_EQUAL_64(0, x3);              // Xn
+    ASSERT_EQUAL_64(allowed_flags, x20);
+    ASSERT_EQUAL_64(0x0807'0605'0403'0201, x10);
+    ASSERT_EQUAL_64(0x0f0f'0e0d'0c0b'0a09, x11);
+
+    ASSERT_EQUAL_64(buf_addr + 16, x4);  // Xs
+    ASSERT_EQUAL_64(buf_addr + 15, x5);  // Xd
+    ASSERT_EQUAL_64(0, x6);              // Xn
+    ASSERT_EQUAL_64(allowed_flags, x21);
+    ASSERT_EQUAL_64(0x0908'0706'0504'0302, x12);
+    ASSERT_EQUAL_64(0x0f0f'0f0e'0d0c'0b0a, x13);
+
+    ASSERT_EQUAL_64(buf_addr + 16, x7);  // Xs
+    ASSERT_EQUAL_64(buf_addr + 15, x8);  // Xd
+    ASSERT_EQUAL_64(0, x9);              // Xn
+    ASSERT_EQUAL_64(allowed_flags, x22);
+    ASSERT_EQUAL_64(0x0a09'0807'0605'0403, x14);
+    ASSERT_EQUAL_64(0x0f0f'0f0f'0e0d'0c0b, x15);
+  }
+}
+
+TEST(cssc_abs) {
+  SETUP_WITH_FEATURES(CPUFeatures::kCSSC);
+
+  START();
+  __ Mov(x0, -1);
+  __ Mov(x1, 1);
+  __ Mov(x2, 0);
+  __ Mov(x3, 0x7fff'ffff);
+  __ Mov(x4, 0x8000'0000);
+  __ Mov(x5, 0x8000'0001);
+  __ Mov(x6, 0x7fff'ffff'ffff'ffff);
+  __ Mov(x7, 0x8000'0000'0000'0000);
+  __ Mov(x8, 0x8000'0000'0000'0001);
+
+  __ Abs(w10, w0);
+  __ Abs(x11, x0);
+  __ Abs(w12, w1);
+  __ Abs(x13, x1);
+  __ Abs(w14, w2);
+  __ Abs(x15, x2);
+
+  __ Abs(w19, w3);
+  __ Abs(x20, x3);
+  __ Abs(w21, w4);
+  __ Abs(x22, x4);
+  __ Abs(w23, w5);
+  __ Abs(x24, x5);
+  __ Abs(w25, w6);
+  __ Abs(x26, x6);
+  __ Abs(w27, w7);
+  __ Abs(x28, x7);
+  __ Abs(w29, w8);
+  __ Abs(x30, x8);
+  END();
+
+  if (CAN_RUN()) {
+    RUN();
+
+    ASSERT_EQUAL_64(1, x10);
+    ASSERT_EQUAL_64(1, x11);
+    ASSERT_EQUAL_64(1, x12);
+    ASSERT_EQUAL_64(1, x13);
+    ASSERT_EQUAL_64(0, x14);
+    ASSERT_EQUAL_64(0, x15);
+    ASSERT_EQUAL_64(0x7fff'ffff, x19);
+    ASSERT_EQUAL_64(0x7fff'ffff, x20);
+    ASSERT_EQUAL_64(0x8000'0000, x21);
+    ASSERT_EQUAL_64(0x8000'0000, x22);
+    ASSERT_EQUAL_64(0x7fff'ffff, x23);
+    ASSERT_EQUAL_64(0x8000'0001, x24);
+    ASSERT_EQUAL_64(1, x25);
+    ASSERT_EQUAL_64(0x7fff'ffff'ffff'ffff, x26);
+    ASSERT_EQUAL_64(0, x27);
+    ASSERT_EQUAL_64(0x8000'0000'0000'0000, x28);
+    ASSERT_EQUAL_64(1, x29);
+    ASSERT_EQUAL_64(0x7fff'ffff'ffff'ffff, x30);
+  }
+}
+
+TEST(cssc_cnt) {
+  SETUP_WITH_FEATURES(CPUFeatures::kCSSC);
+
+  START();
+  __ Mov(x0, -1);
+  __ Mov(x1, 1);
+  __ Mov(x2, 0);
+  __ Mov(x3, 0x7fff'ffff);
+  __ Mov(x4, 0x8000'0000);
+  __ Mov(x5, 0x8000'0001);
+  __ Mov(x6, 0x7fff'ffff'ffff'ffff);
+  __ Mov(x7, 0x4242'4242'aaaa'aaaa);
+
+  __ Cnt(w10, w0);
+  __ Cnt(x11, x0);
+  __ Cnt(w12, w1);
+  __ Cnt(x13, x1);
+  __ Cnt(w14, w2);
+  __ Cnt(x15, x2);
+  __ Cnt(w19, w3);
+  __ Cnt(x20, x3);
+  __ Cnt(w21, w4);
+  __ Cnt(x22, x4);
+  __ Cnt(w23, w5);
+  __ Cnt(x24, x5);
+  __ Cnt(w25, w6);
+  __ Cnt(x26, x6);
+  __ Cnt(w27, w7);
+  __ Cnt(x28, x7);
+  END();
+
+  if (CAN_RUN()) {
+    RUN();
+
+    ASSERT_EQUAL_64(32, x10);
+    ASSERT_EQUAL_64(64, x11);
+    ASSERT_EQUAL_64(1, x12);
+    ASSERT_EQUAL_64(1, x13);
+    ASSERT_EQUAL_64(0, x14);
+    ASSERT_EQUAL_64(0, x15);
+    ASSERT_EQUAL_64(31, x19);
+    ASSERT_EQUAL_64(31, x20);
+    ASSERT_EQUAL_64(1, x21);
+    ASSERT_EQUAL_64(1, x22);
+    ASSERT_EQUAL_64(2, x23);
+    ASSERT_EQUAL_64(2, x24);
+    ASSERT_EQUAL_64(32, x25);
+    ASSERT_EQUAL_64(63, x26);
+    ASSERT_EQUAL_64(16, x27);
+    ASSERT_EQUAL_64(24, x28);
+  }
+}
+
+TEST(cssc_ctz) {
+  SETUP_WITH_FEATURES(CPUFeatures::kCSSC);
+
+  START();
+  __ Mov(x0, -1);
+  __ Mov(x1, 1);
+  __ Mov(x2, 2);
+  __ Mov(x3, 0x7fff'ff00);
+  __ Mov(x4, 0x8000'4000);
+  __ Mov(x5, 0x4000'0001);
+  __ Mov(x6, 0x0000'0001'0000'0000);
+  __ Mov(x7, 0x4200'0000'0000'0000);
+
+  __ Ctz(w10, w0);
+  __ Ctz(x11, x0);
+  __ Ctz(w12, w1);
+  __ Ctz(x13, x1);
+  __ Ctz(w14, w2);
+  __ Ctz(x15, x2);
+  __ Ctz(w19, w3);
+  __ Ctz(x20, x3);
+  __ Ctz(w21, w4);
+  __ Ctz(x22, x4);
+  __ Ctz(w23, w5);
+  __ Ctz(x24, x5);
+  __ Ctz(w25, w6);
+  __ Ctz(x26, x6);
+  __ Ctz(w27, w7);
+  __ Ctz(x28, x7);
+  END();
+
+  if (CAN_RUN()) {
+    RUN();
+
+    ASSERT_EQUAL_64(0, x10);
+    ASSERT_EQUAL_64(0, x11);
+    ASSERT_EQUAL_64(0, x12);
+    ASSERT_EQUAL_64(0, x13);
+    ASSERT_EQUAL_64(1, x14);
+    ASSERT_EQUAL_64(1, x15);
+    ASSERT_EQUAL_64(8, x19);
+    ASSERT_EQUAL_64(8, x20);
+    ASSERT_EQUAL_64(14, x21);
+    ASSERT_EQUAL_64(14, x22);
+    ASSERT_EQUAL_64(0, x23);
+    ASSERT_EQUAL_64(0, x24);
+    ASSERT_EQUAL_64(32, x25);
+    ASSERT_EQUAL_64(32, x26);
+    ASSERT_EQUAL_64(32, x27);
+    ASSERT_EQUAL_64(57, x28);
+  }
+}
+
+using MinMaxOp = void (MacroAssembler::*)(const Register&,
+                                          const Register&,
+                                          const Operand&);
+
+static void MinMaxHelper(MinMaxOp op,
+                         bool is_signed,
+                         uint64_t a,
+                         uint64_t b,
+                         uint32_t wexp,
+                         uint64_t xexp) {
+  SETUP_WITH_FEATURES(CPUFeatures::kCSSC);
+
+  START();
+  __ Mov(x0, a);
+  __ Mov(x1, b);
+  if ((is_signed && IsInt8(b)) || (!is_signed && IsUint8(b))) {
+    (masm.*op)(w10, w0, b);
+    (masm.*op)(x11, x0, b);
+  } else {
+    (masm.*op)(w10, w0, w1);
+    (masm.*op)(x11, x0, x1);
+  }
+  END();
+
+  if (CAN_RUN()) {
+    RUN();
+    ASSERT_EQUAL_64(wexp, x10);
+    ASSERT_EQUAL_64(xexp, x11);
+  }
+}
+
+TEST(cssc_umin) {
+  MinMaxOp op = &MacroAssembler::Umin;
+  uint32_t s32min = 0x8000'0000;
+  uint32_t s32max = 0x7fff'ffff;
+  uint64_t s64min = 0x8000'0000'0000'0000;
+  uint64_t s64max = 0x7fff'ffff'ffff'ffff;
+
+  MinMaxHelper(op, false, 0, 0, 0, 0);
+  MinMaxHelper(op, false, 128, 255, 128, 128);
+  MinMaxHelper(op, false, 0, 0xffff'ffff'ffff'ffff, 0, 0);
+  MinMaxHelper(op, false, s32max, s32min, s32max, s32max);
+  MinMaxHelper(op, false, s32min, s32max, s32max, s32max);
+  MinMaxHelper(op, false, s64max, s32min, s32min, s32min);
+  MinMaxHelper(op, false, s64min, s64max, 0, s64max);
+}
+
+TEST(cssc_umax) {
+  MinMaxOp op = &MacroAssembler::Umax;
+  uint32_t s32min = 0x8000'0000;
+  uint32_t s32max = 0x7fff'ffff;
+  uint64_t s64min = 0x8000'0000'0000'0000;
+  uint64_t s64max = 0x7fff'ffff'ffff'ffff;
+
+  MinMaxHelper(op, false, 0, 0, 0, 0);
+  MinMaxHelper(op, false, 128, 255, 255, 255);
+  MinMaxHelper(op,
+               false,
+               0,
+               0xffff'ffff'ffff'ffff,
+               0xffff'ffff,
+               0xffff'ffff'ffff'ffff);
+  MinMaxHelper(op, false, s32max, s32min, s32min, s32min);
+  MinMaxHelper(op, false, s32min, s32max, s32min, s32min);
+  MinMaxHelper(op, false, s64max, s32min, 0xffff'ffff, s64max);
+  MinMaxHelper(op, false, s64min, s64max, 0xffff'ffff, s64min);
+}
+
+TEST(cssc_smin) {
+  MinMaxOp op = &MacroAssembler::Smin;
+  uint32_t s32min = 0x8000'0000;
+  uint32_t s32max = 0x7fff'ffff;
+  uint64_t s64min = 0x8000'0000'0000'0000;
+  uint64_t s64max = 0x7fff'ffff'ffff'ffff;
+
+  MinMaxHelper(op, true, 0, 0, 0, 0);
+  MinMaxHelper(op, true, 128, 255, 128, 128);
+  MinMaxHelper(op,
+               true,
+               0,
+               0xffff'ffff'ffff'ffff,
+               0xffff'ffff,
+               0xffff'ffff'ffff'ffff);
+  MinMaxHelper(op, true, s32max, s32min, s32min, s32max);
+  MinMaxHelper(op, true, s32min, s32max, s32min, s32max);
+  MinMaxHelper(op, true, s64max, s32min, s32min, s32min);
+  MinMaxHelper(op, true, s64min, s64max, 0xffff'ffff, s64min);
+}
+
+TEST(cssc_smax) {
+  MinMaxOp op = &MacroAssembler::Smax;
+  uint32_t s32min = 0x8000'0000;
+  uint32_t s32max = 0x7fff'ffff;
+  uint64_t s64min = 0x8000'0000'0000'0000;
+  uint64_t s64max = 0x7fff'ffff'ffff'ffff;
+
+  MinMaxHelper(op, true, 0, 0, 0, 0);
+  MinMaxHelper(op, true, 128, 255, 255, 255);
+  MinMaxHelper(op, true, 0, 0xffff'ffff'ffff'ffff, 0, 0);
+  MinMaxHelper(op, true, s32max, s32min, s32max, s32min);
+  MinMaxHelper(op, true, s32min, s32max, s32max, s32min);
+  MinMaxHelper(op, true, s64max, s32min, 0xffff'ffff, s64max);
+  MinMaxHelper(op, true, s64min, s64max, 0, s64max);
+}
+
+static void ChkfeatHelper(uint64_t initial,
+                          uint64_t chkfeat,
+                          CPUFeatures require) {
+  SETUP_WITH_FEATURES(require);
+
+  START();
+  __ Mov(x16, initial);
+  __ Chkfeat(x16);
+  __ Mov(x0, x16);
+
+  __ Mov(x1, initial);
+  __ Chkfeat(x1);
+  END();
+
+  if (CAN_RUN()) {
+    RUN_WITHOUT_SEEN_FEATURE_CHECK();
+    ASSERT_EQUAL_64(chkfeat, x0);
+    ASSERT_EQUAL_64(x0, x1);
+  }
+}
+
+TEST(chkfeat) { ChkfeatHelper(0x0, 0x0, CPUFeatures::None()); }
+
+TEST(chkfeat_gcs) { ChkfeatHelper(0x1, 0x0, CPUFeatures::kGCS); }
+
+TEST(chkfeat_unused) {
+  // Bits 1-63 are reserved. This test ensures that they are unmodified by
+  // `chkfeat`, but it will need to be updated if these bits are assigned in the
+  // future.
+  ChkfeatHelper(0xffff'ffff'ffff'fffe,
+                0xffff'ffff'ffff'fffe,
+                CPUFeatures::None());
+}
+
+TEST(gcs_feature_off) {
+  SETUP();
+
+  START();
+#ifdef VIXL_INCLUDE_SIMULATOR_AARCH64
+  simulator.DisableGCSCheck();
+#else
+// TODO: Disable GCS via operating system for this test, here and in the
+// gcs_off_pac_on test below.
+#endif
+  __ Mov(x16, 0x0123'4567'89ab'cdef);
+  __ Chkfeat(x16);
+
+  // This sequence would fail with GCS enabled.
+  Label lab, end;
+  __ Bl(&lab);
+  __ B(&end);
+
+  __ Bind(&lab);
+  __ Adr(lr, &end);
+  __ Ret();
+
+  __ Bind(&end);
+  END();
+
+  if (CAN_RUN()) {
+    // TODO: This will currently fail on GCS-supporting hardware.
+    RUN();
+    ASSERT_EQUAL_64(0x0123'4567'89ab'cdef, x16);
+  }
+}
+
+TEST(gcs_gcspushm) {
+  SETUP_WITH_FEATURES(CPUFeatures::kGCS);
+
+  Label ret;
+  START();
+  __ Adr(x0, &ret);
+  __ Gcspushm(x0);
+  __ Ret(x0);
+  __ Nop();
+  __ Bind(&ret);
+  END();
+
+  if (CAN_RUN()) {
+    RUN();
+  }
+}
+
+TEST(gcs_gcspopm) {
+  SETUP_WITH_FEATURES(CPUFeatures::kGCS);
+
+  Label lab, ret;
+  START();
+  __ Adr(x0, &ret);
+  __ Bl(&lab);
+  __ Bind(&ret);
+  __ Nop();
+  __ Bind(&lab);
+  __ Gcspopm(x1);
+  END();
+
+  if (CAN_RUN()) {
+    RUN();
+    ASSERT_EQUAL_64(x0, x1);
+  }
+}
+
+TEST(gcs_gcsss1) {
+  SETUP_WITH_FEATURES(CPUFeatures::kGCS);
+
+  START();
+#ifdef VIXL_INCLUDE_SIMULATOR_AARCH64
+  uint64_t new_gcs = simulator.GetGCSManager().AllocateStack();
+  __ Mov(x0, new_gcs);
+#else
+// TODO: Request new GCS from the operating system.
+#endif
+
+  // Partial stack swap to check GCS has changed, and a token is at the top
+  // of the new stack.
+  __ Gcsss1(x0);
+  __ Gcspopm(x1);
+
+  __ Bic(x0, x0, 7);  // Clear LSB of new GCS.
+  __ Bic(x2, x1, 7);  // Clear LSB of old GCS.
+  __ Cmp(x0, x2);
+  __ Cset(x0, eq);
+  __ And(x1, x1, 7);  // In progress token.
+  END();
+
+  if (CAN_RUN()) {
+    RUN();
+    ASSERT_EQUAL_64(0, x0);  // GCS must not be equal.
+    ASSERT_EQUAL_64(5, x1);  // In progress token must be present.
+  }
+}
+
+// TODO: Add extra tests for combinations of PAC and GCS enabled.
+TEST(gcs_stack_swap) {
+  SETUP_WITH_FEATURES(CPUFeatures::kGCS);
+
+  START();
+  Label stack_swap, sub_fn, end;
+#ifdef VIXL_INCLUDE_SIMULATOR_AARCH64
+  uint64_t new_gcs = simulator.GetGCSManager().AllocateStack();
+  __ Mov(x0, new_gcs);
+#else
+// TODO: Request new GCS from the operating system.
+#endif
+  __ Bl(&stack_swap);
+  __ B(&end);
+
+  __ Bind(&stack_swap);
+  __ Gcsss1(x0);  // x0 = new GCS.
+  __ Gcsss2(x1);  // x1 = old GCS.
+  __ Mov(x29, lr);
+  __ Bl(&sub_fn);
+  __ Mov(lr, x29);
+  __ Gcsss1(x1);  // Restore old GCS.
+  __ Gcsss2(x0);
+  __ Ret();
+
+  __ Bind(&sub_fn);
+  __ Mov(x2, 42);
+  __ Ret();
+
+  __ Bind(&end);
+  END();
+
+  if (CAN_RUN()) {
+    RUN();
+    ASSERT_EQUAL_64(42, x2);
+  }
+}
+
+TEST(gcs_off_pac_on) {
+  SETUP_WITH_FEATURES(CPUFeatures::kPAuth);
+
+  START();
+#ifdef VIXL_INCLUDE_SIMULATOR_AARCH64
+  simulator.DisableGCSCheck();
+#else
+// TODO: Disable GCS via operating system for this test, and enable for native.
+#endif
+  __ Mov(x16, 1);
+  __ Chkfeat(x16);
+  __ Mov(x1, x16);
+
+  Label fn1, after_fn1;
+
+  __ Mov(x28, sp);
+  __ Mov(x29, lr);
+  __ Mov(sp, 0x477d469dec0b8760);
+
+  __ Mov(x0, 0);
+  __ B(&after_fn1);
+
+  __ Bind(&fn1);
+  __ Mov(x0, 42);
+  __ Paciasp();
+  __ Retaa();
+
+  __ Bind(&after_fn1);
+  __ Bl(&fn1);
+
+  __ Mov(sp, x28);
+  __ Mov(lr, x29);
+  END();
+
+  if (CAN_RUN()) {
+    RUN();
+
+    ASSERT_EQUAL_64(42, x0);
+    ASSERT_EQUAL_64(1, x1);
+  }
+}
+
+#ifdef VIXL_NEGATIVE_TESTING
+TEST(gcs_negative_test) {
+  SETUP_WITH_FEATURES(CPUFeatures::kGCS);
+
+  Label fn, bad_return_addr, done;
+  START();
+  __ Bl(&fn);
+  __ Nop();  // GCS enforces that fn() returns here...
+
+  __ Bind(&bad_return_addr);
+  __ B(&done);  // ... but this test attempts to return here.
+
+  __ Bind(&fn);
+  __ Adr(lr, &bad_return_addr);
+  __ Ret();
+
+  __ Bind(&done);
+  END();
+
+  if (CAN_RUN()) {
+    MUST_FAIL_WITH_MESSAGE(RUN(), "GCS failed");
+  }
+}
+#endif  // VIXL_NEGATIVE_TESTING
+
+TEST(dc_zva) {
+  SETUP_WITH_FEATURES(CPUFeatures::kNEON);
+
+  const int zva_blocksize = 64;  // Assumed blocksize.
+  uint8_t buf[2 * zva_blocksize];
+  uintptr_t buf_addr = reinterpret_cast<uintptr_t>(buf);
+  uintptr_t aligned_addr = AlignUp(buf_addr, zva_blocksize);
+
+  START();
+  // Skip this test if the ZVA blocksize is not 64 bytes.
+  // Set up initial register values to allow the test to pass when skipped.
+  Label skip;
+  __ Movi(q0.V16B(), 0);
+  __ Movi(q1.V16B(), 0);
+  __ Movi(q2.V16B(), 0);
+  __ Movi(q3.V16B(), 0);
+
+  __ Mrs(x1, DCZID_EL0);
+  __ Cmp(x1, 4);  // 4 => DC ZVA enabled with 64-byte blocks.
+  __ B(ne, &skip);
+
+  // Fill aligned region with a pattern.
+  __ Mov(x0, aligned_addr);
+  __ Movi(q0.V16B(), 0x55);
+  __ Movi(q1.V16B(), 0xaa);
+  __ Movi(q2.V16B(), 0x55);
+  __ Movi(q3.V16B(), 0xaa);
+  __ St4(q0.V16B(), q1.V16B(), q2.V16B(), q3.V16B(), MemOperand(x0));
+
+  // Misalign the address to check DC ZVA re-aligns.
+  __ Add(x0, x0, 42);
+
+  // Clear the aligned region.
+  __ Dc(ZVA, x0);
+
+  // Reload the aligned region to check contents.
+  __ Mov(x0, aligned_addr);
+  __ Ld1(q0.V16B(), q1.V16B(), q2.V16B(), q3.V16B(), MemOperand(x0));
+
+  __ Bind(&skip);
+  END();
+
+  if (CAN_RUN()) {
+    RUN();
+    if (core.xreg(1) == 4) {
+      ASSERT_EQUAL_128(0, 0, q0);
+      ASSERT_EQUAL_128(0, 0, q1);
+      ASSERT_EQUAL_128(0, 0, q2);
+      ASSERT_EQUAL_128(0, 0, q3);
+    } else {
+      printf("SKIPPED: DC ZVA chunksize not 64-bytes");
+    }
+  }
 }
 
 #ifdef VIXL_INCLUDE_SIMULATOR_AARCH64
@@ -13686,6 +15646,27 @@ TEST(sim_stack_base_guard_write) {
 }
 #endif
 #endif
+
+TEST(scalar_movi) {
+  SETUP_WITH_FEATURES(CPUFeatures::kFP, CPUFeatures::kNEON);
+  START();
+
+  // Make sure that V0 is initialized to a non-zero value.
+  __ Movi(v0.V16B(), 0xFF);
+  // This constant value can't be encoded in a MOVI instruction,
+  // so the program would use a fallback path that must set the
+  // upper 64 bits of the destination vector to 0.
+  __ Movi(v0.V1D(), 0xDECAFC0FFEE);
+  __ Mov(x0, v0.V2D(), 1);
+
+  END();
+
+  if (CAN_RUN()) {
+    RUN();
+
+    ASSERT_EQUAL_64(0, x0);
+  }
+}
 
 }  // namespace aarch64
 }  // namespace vixl
