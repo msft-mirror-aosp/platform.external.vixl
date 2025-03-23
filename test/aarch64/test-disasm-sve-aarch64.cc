@@ -30,10 +30,10 @@
 #include <string>
 
 #include "test-runner.h"
-#include "aarch64/test-utils-aarch64.h"
 
 #include "aarch64/disasm-aarch64.h"
 #include "aarch64/macro-assembler-aarch64.h"
+#include "aarch64/test-utils-aarch64.h"
 #include "test-disasm-aarch64.h"
 #include "test-utils-aarch64.h"
 
@@ -2381,7 +2381,9 @@ TEST(sve_int_binary_arithmetic_predicated_macro) {
   COMPARE_MACRO(Bic(z17.VnB(), p7.Merging(), z17.VnB(), z10.VnB()),
                 "bic z17.b, p7/m, z17.b, z10.b");
   COMPARE_MACRO(Bic(z17.VnS(), p7.Merging(), z10.VnS(), z17.VnS()),
-                "bic z17.s, p7/m, z17.s, z10.s");
+                "mov z31.d, z17.d\n"
+                "movprfx z17.s, p7/m, z10.s\n"
+                "bic z17.s, p7/m, z17.s, z31.s");
   COMPARE_MACRO(Bic(z17.VnD(), p7.Merging(), z7.VnD(), z27.VnD()),
                 "movprfx z17.d, p7/m, z7.d\n"
                 "bic z17.d, p7/m, z17.d, z27.d");
@@ -7671,13 +7673,14 @@ TEST(sve2_integer_multiply_long_vector) {
   COMPARE(sqdmullt(z7.VnD(), z4.VnS(), z0.VnS(), 0),
           "sqdmullt z7.d, z4.s, z0.s[0]");
 
-  // Feature `SVEPmull128` is not supported.
-  // COMPARE(pmullb(z12.VnQ(), z21.VnD(), z12.VnD()),
-  //                "pmullb z12.q, z21.d, z12.d");
   COMPARE(pmullb(z12.VnH(), z21.VnB(), z12.VnB()),
           "pmullb z12.h, z21.b, z12.b");
   COMPARE(pmullt(z31.VnD(), z30.VnS(), z26.VnS()),
           "pmullt z31.d, z30.s, z26.s");
+  COMPARE(pmullb(z12.VnQ(), z21.VnD(), z12.VnD()),
+          "pmullb z12.q, z21.d, z12.d");
+  COMPARE(pmullt(z12.VnQ(), z21.VnD(), z12.VnD()),
+          "pmullt z12.q, z21.d, z12.d");
 
   COMPARE(smullb(z10.VnD(), z4.VnS(), z4.VnS()), "smullb z10.d, z4.s, z4.s");
   COMPARE(smullb(z11.VnH(), z14.VnB(), z14.VnB()),
@@ -7698,6 +7701,10 @@ TEST(sve2_integer_multiply_long_vector) {
   COMPARE(umullt(z24.VnD(), z6.VnS(), z6.VnS()), "umullt z24.d, z6.s, z6.s");
   COMPARE(umullt(z24.VnH(), z7.VnB(), z16.VnB()), "umullt z24.h, z7.b, z16.b");
   COMPARE(umullt(z24.VnS(), z8.VnH(), z26.VnH()), "umullt z24.s, z8.h, z26.h");
+
+  // Check related but undefined encodings.
+  COMPARE(dci(0x45806800), "unallocated (Unallocated)");  // pmullb s, h, h
+  COMPARE(dci(0x45806c00), "unallocated (Unallocated)");  // pmullt s, h, h
 
   CLEANUP();
 }

@@ -1792,6 +1792,34 @@ TEST(neon_3same) {
   COMPARE_MACRO(Pmul(v6.V16B(), v7.V16B(), v8.V16B()),
                 "pmul v6.16b, v7.16b, v8.16b");
 
+  // Check unallocated vector types for SDOT.
+  COMPARE(dci(0x0e009400), "unallocated (Unallocated)");  // 8B
+  COMPARE(dci(0x4e009400), "unallocated (Unallocated)");  // 16B
+  COMPARE(dci(0x0e409400), "unallocated (Unallocated)");  // 4H
+  COMPARE(dci(0x4e409400), "unallocated (Unallocated)");  // 8H
+  COMPARE(dci(0x0ec09400), "unallocated (Unallocated)");  // 1D
+  COMPARE(dci(0x4ec09400), "unallocated (Unallocated)");  // 2D
+
+  // Check unallocated vector types for UDOT.
+  COMPARE(dci(0x2e009400), "unallocated (Unallocated)");  // 8B
+  COMPARE(dci(0x6e009400), "unallocated (Unallocated)");  // 16B
+  COMPARE(dci(0x2e409400), "unallocated (Unallocated)");  // 4H
+  COMPARE(dci(0x6e409400), "unallocated (Unallocated)");  // 8H
+  COMPARE(dci(0x2ec09400), "unallocated (Unallocated)");  // 1D
+  COMPARE(dci(0x6ec09400), "unallocated (Unallocated)");  // 2D
+
+  // Check unallocated vector types for SQRDMLAH.
+  COMPARE(dci(0x2e008400), "unallocated (Unallocated)");  // 8B
+  COMPARE(dci(0x6e008400), "unallocated (Unallocated)");  // 16B
+  COMPARE(dci(0x2ec08400), "unallocated (Unallocated)");  // 1D
+  COMPARE(dci(0x6ec08400), "unallocated (Unallocated)");  // 2D
+
+  // Check unallocated vector types for SQRDMLSH.
+  COMPARE(dci(0x2e008c00), "unallocated (Unallocated)");  // 8B
+  COMPARE(dci(0x6e008c00), "unallocated (Unallocated)");  // 16B
+  COMPARE(dci(0x2ec08c00), "unallocated (Unallocated)");  // 1D
+  COMPARE(dci(0x6ec08c00), "unallocated (Unallocated)");  // 2D
+
   CLEANUP();
 }
 
@@ -1923,6 +1951,16 @@ TEST(neon_3same_extra_fcadd) {
   // FC* instructions.
   COMPARE(dci(0x2e00ec00), "unallocated (Unallocated)");  // opcode = 0x1101
   COMPARE(dci(0x2e00fc00), "unallocated (Unallocated)");  // opcode = 0x1111
+
+  // Check unallocated vector types for FCADD.
+  COMPARE(dci(0x2e00e400), "unallocated (Unallocated)");  // 8B
+  COMPARE(dci(0x6e00e400), "unallocated (Unallocated)");  // 16B
+  COMPARE(dci(0x2ec0e400), "unallocated (Unallocated)");  // 1D
+
+  // Check unallocated vector types for FCMLA.
+  COMPARE(dci(0x2e00c400), "unallocated (Unallocated)");  // 8B
+  COMPARE(dci(0x6e00c400), "unallocated (Unallocated)");  // 16B
+  COMPARE(dci(0x2ec0c400), "unallocated (Unallocated)");  // 1D
 
   CLEANUP();
 }
@@ -2251,6 +2289,8 @@ TEST(neon_byelement) {
                 "mul v0.2s, v1.2s, v2.s[0]");
   COMPARE_MACRO(Mul(v2.V4S(), v3.V4S(), v15.S(), 3),
                 "mul v2.4s, v3.4s, v15.s[3]");
+  COMPARE_MACRO(Mul(v11.V2S(), v17.V2S(), v26.S(), 1),
+                "mul v11.2s, v17.2s, v26.s[1]");
 
   COMPARE_MACRO(Mla(v0.V4H(), v1.V4H(), v2.H(), 0),
                 "mla v0.4h, v1.4h, v2.h[0]");
@@ -2260,6 +2300,8 @@ TEST(neon_byelement) {
                 "mla v0.2s, v1.2s, v2.s[0]");
   COMPARE_MACRO(Mla(v2.V4S(), v3.V4S(), v15.S(), 3),
                 "mla v2.4s, v3.4s, v15.s[3]");
+  COMPARE_MACRO(Mla(v11.V2S(), v17.V2S(), v26.S(), 1),
+                "mla v11.2s, v17.2s, v26.s[1]");
 
   COMPARE_MACRO(Mls(v0.V4H(), v1.V4H(), v2.H(), 0),
                 "mls v0.4h, v1.4h, v2.h[0]");
@@ -2269,6 +2311,8 @@ TEST(neon_byelement) {
                 "mls v0.2s, v1.2s, v2.s[0]");
   COMPARE_MACRO(Mls(v2.V4S(), v3.V4S(), v15.S(), 3),
                 "mls v2.4s, v3.4s, v15.s[3]");
+  COMPARE_MACRO(Mls(v11.V2S(), v17.V2S(), v31.S(), 1),
+                "mls v11.2s, v17.2s, v31.s[1]");
 
   COMPARE_MACRO(Sqdmulh(v0.V4H(), v1.V4H(), v2.H(), 0),
                 "sqdmulh v0.4h, v1.4h, v2.h[0]");
@@ -2278,8 +2322,11 @@ TEST(neon_byelement) {
                 "sqdmulh v0.2s, v1.2s, v2.s[0]");
   COMPARE_MACRO(Sqdmulh(v2.V4S(), v3.V4S(), v15.S(), 3),
                 "sqdmulh v2.4s, v3.4s, v15.s[3]");
+  COMPARE_MACRO(Sqdmulh(v11.V2S(), v17.V2S(), v31.S(), 1),
+                "sqdmulh v11.2s, v17.2s, v31.s[1]");
   COMPARE_MACRO(Sqdmulh(h0, h1, v2.H(), 0), "sqdmulh h0, h1, v2.h[0]");
   COMPARE_MACRO(Sqdmulh(s0, s1, v2.S(), 0), "sqdmulh s0, s1, v2.s[0]");
+  COMPARE_MACRO(Sqdmulh(s0, s1, v31.S(), 1), "sqdmulh s0, s1, v31.s[1]");
 
   COMPARE_MACRO(Sqrdmulh(v0.V4H(), v1.V4H(), v2.H(), 0),
                 "sqrdmulh v0.4h, v1.4h, v2.h[0]");
@@ -2289,13 +2336,18 @@ TEST(neon_byelement) {
                 "sqrdmulh v0.2s, v1.2s, v2.s[0]");
   COMPARE_MACRO(Sqrdmulh(v2.V4S(), v3.V4S(), v15.S(), 3),
                 "sqrdmulh v2.4s, v3.4s, v15.s[3]");
+  COMPARE_MACRO(Sqrdmulh(v11.V2S(), v17.V2S(), v31.S(), 1),
+                "sqrdmulh v11.2s, v17.2s, v31.s[1]");
   COMPARE_MACRO(Sqrdmulh(h0, h1, v2.H(), 0), "sqrdmulh h0, h1, v2.h[0]");
   COMPARE_MACRO(Sqrdmulh(s0, s1, v2.S(), 0), "sqrdmulh s0, s1, v2.s[0]");
+  COMPARE_MACRO(Sqrdmulh(s0, s1, v31.S(), 1), "sqrdmulh s0, s1, v31.s[1]");
 
   COMPARE_MACRO(Sdot(v0.V2S(), v1.V8B(), v2.S4B(), 0),
                 "sdot v0.2s, v1.8b, v2.4b[0]");
   COMPARE_MACRO(Sdot(v2.V4S(), v3.V16B(), v15.S4B(), 3),
                 "sdot v2.4s, v3.16b, v15.4b[3]");
+  COMPARE_MACRO(Sdot(v11.V2S(), v17.V8B(), v31.S4B(), 1),
+                "sdot v11.2s, v17.8b, v31.4b[1]");
 
   COMPARE_MACRO(Sqrdmlah(v0.V4H(), v1.V4H(), v2.H(), 0),
                 "sqrdmlah v0.4h, v1.4h, v2.h[0]");
@@ -2305,13 +2357,18 @@ TEST(neon_byelement) {
                 "sqrdmlah v0.2s, v1.2s, v2.s[0]");
   COMPARE_MACRO(Sqrdmlah(v2.V4S(), v3.V4S(), v15.S(), 3),
                 "sqrdmlah v2.4s, v3.4s, v15.s[3]");
+  COMPARE_MACRO(Sqrdmlah(v11.V2S(), v17.V2S(), v31.S(), 1),
+                "sqrdmlah v11.2s, v17.2s, v31.s[1]");
   COMPARE_MACRO(Sqrdmlah(h0, h1, v2.H(), 0), "sqrdmlah h0, h1, v2.h[0]");
   COMPARE_MACRO(Sqrdmlah(s0, s1, v2.S(), 0), "sqrdmlah s0, s1, v2.s[0]");
+  COMPARE_MACRO(Sqrdmlah(s0, s1, v31.S(), 1), "sqrdmlah s0, s1, v31.s[1]");
 
   COMPARE_MACRO(Udot(v0.V2S(), v1.V8B(), v2.S4B(), 0),
                 "udot v0.2s, v1.8b, v2.4b[0]");
   COMPARE_MACRO(Udot(v2.V4S(), v3.V16B(), v15.S4B(), 3),
                 "udot v2.4s, v3.16b, v15.4b[3]");
+  COMPARE_MACRO(Udot(v11.V2S(), v17.V8B(), v31.S4B(), 1),
+                "udot v11.2s, v17.8b, v31.4b[1]");
 
   COMPARE_MACRO(Sqrdmlsh(v0.V4H(), v1.V4H(), v2.H(), 0),
                 "sqrdmlsh v0.4h, v1.4h, v2.h[0]");
@@ -2321,8 +2378,11 @@ TEST(neon_byelement) {
                 "sqrdmlsh v0.2s, v1.2s, v2.s[0]");
   COMPARE_MACRO(Sqrdmlsh(v2.V4S(), v3.V4S(), v15.S(), 3),
                 "sqrdmlsh v2.4s, v3.4s, v15.s[3]");
+  COMPARE_MACRO(Sqrdmlsh(v11.V2S(), v17.V2S(), v31.S(), 1),
+                "sqrdmlsh v11.2s, v17.2s, v31.s[1]");
   COMPARE_MACRO(Sqrdmlsh(h0, h1, v2.H(), 0), "sqrdmlsh h0, h1, v2.h[0]");
   COMPARE_MACRO(Sqrdmlsh(s0, s1, v2.S(), 0), "sqrdmlsh s0, s1, v2.s[0]");
+  COMPARE_MACRO(Sqrdmlsh(s0, s1, v31.S(), 1), "sqrdmlsh s0, s1, v31.s[1]");
 
   COMPARE_MACRO(Smull(v0.V4S(), v1.V4H(), v2.H(), 0),
                 "smull v0.4s, v1.4h, v2.h[0]");
@@ -2332,6 +2392,8 @@ TEST(neon_byelement) {
                 "smull v0.2d, v1.2s, v2.s[0]");
   COMPARE_MACRO(Smull2(v2.V2D(), v3.V4S(), v4.S(), 3),
                 "smull2 v2.2d, v3.4s, v4.s[3]");
+  COMPARE_MACRO(Smull(v11.V2D(), v17.V2S(), v31.S(), 1),
+                "smull v11.2d, v17.2s, v31.s[1]");
 
   COMPARE_MACRO(Umull(v0.V4S(), v1.V4H(), v2.H(), 0),
                 "umull v0.4s, v1.4h, v2.h[0]");
@@ -2341,6 +2403,8 @@ TEST(neon_byelement) {
                 "umull v0.2d, v1.2s, v2.s[0]");
   COMPARE_MACRO(Umull2(v2.V2D(), v3.V4S(), v4.S(), 3),
                 "umull2 v2.2d, v3.4s, v4.s[3]");
+  COMPARE_MACRO(Umull(v11.V2D(), v17.V2S(), v31.S(), 1),
+                "umull v11.2d, v17.2s, v31.s[1]");
 
   COMPARE_MACRO(Smlal(v0.V4S(), v1.V4H(), v2.H(), 0),
                 "smlal v0.4s, v1.4h, v2.h[0]");
@@ -2350,6 +2414,8 @@ TEST(neon_byelement) {
                 "smlal v0.2d, v1.2s, v2.s[0]");
   COMPARE_MACRO(Smlal2(v2.V2D(), v3.V4S(), v4.S(), 3),
                 "smlal2 v2.2d, v3.4s, v4.s[3]");
+  COMPARE_MACRO(Smlal(v11.V2D(), v17.V2S(), v31.S(), 1),
+                "smlal v11.2d, v17.2s, v31.s[1]");
 
   COMPARE_MACRO(Umlal(v0.V4S(), v1.V4H(), v2.H(), 0),
                 "umlal v0.4s, v1.4h, v2.h[0]");
@@ -2359,6 +2425,8 @@ TEST(neon_byelement) {
                 "umlal v0.2d, v1.2s, v2.s[0]");
   COMPARE_MACRO(Umlal2(v2.V2D(), v3.V4S(), v4.S(), 3),
                 "umlal2 v2.2d, v3.4s, v4.s[3]");
+  COMPARE_MACRO(Umlal(v11.V2D(), v17.V2S(), v31.S(), 1),
+                "umlal v11.2d, v17.2s, v31.s[1]");
 
   COMPARE_MACRO(Smlsl(v0.V4S(), v1.V4H(), v2.H(), 0),
                 "smlsl v0.4s, v1.4h, v2.h[0]");
@@ -2368,6 +2436,8 @@ TEST(neon_byelement) {
                 "smlsl v0.2d, v1.2s, v2.s[0]");
   COMPARE_MACRO(Smlsl2(v2.V2D(), v3.V4S(), v4.S(), 3),
                 "smlsl2 v2.2d, v3.4s, v4.s[3]");
+  COMPARE_MACRO(Smlsl(v11.V2D(), v17.V2S(), v31.S(), 1),
+                "smlsl v11.2d, v17.2s, v31.s[1]");
 
   COMPARE_MACRO(Umlsl(v0.V4S(), v1.V4H(), v2.H(), 0),
                 "umlsl v0.4s, v1.4h, v2.h[0]");
@@ -2377,6 +2447,8 @@ TEST(neon_byelement) {
                 "umlsl v0.2d, v1.2s, v2.s[0]");
   COMPARE_MACRO(Umlsl2(v2.V2D(), v3.V4S(), v4.S(), 3),
                 "umlsl2 v2.2d, v3.4s, v4.s[3]");
+  COMPARE_MACRO(Umlsl(v11.V2D(), v17.V2S(), v31.S(), 1),
+                "umlsl v11.2d, v17.2s, v31.s[1]");
 
   COMPARE_MACRO(Sqdmull(v0.V4S(), v1.V4H(), v2.H(), 0),
                 "sqdmull v0.4s, v1.4h, v2.h[0]");
@@ -2386,8 +2458,11 @@ TEST(neon_byelement) {
                 "sqdmull v0.2d, v1.2s, v2.s[0]");
   COMPARE_MACRO(Sqdmull2(v2.V2D(), v3.V4S(), v4.S(), 3),
                 "sqdmull2 v2.2d, v3.4s, v4.s[3]");
+  COMPARE_MACRO(Sqdmull(v11.V2D(), v17.V2S(), v31.S(), 1),
+                "sqdmull v11.2d, v17.2s, v31.s[1]");
   COMPARE_MACRO(Sqdmull(s0, h1, v2.H(), 0), "sqdmull s0, h1, v2.h[0]");
   COMPARE_MACRO(Sqdmull(d0, s1, v2.S(), 0), "sqdmull d0, s1, v2.s[0]");
+  COMPARE_MACRO(Sqdmull(d0, s1, v31.S(), 0), "sqdmull d0, s1, v31.s[0]");
 
   COMPARE_MACRO(Sqdmlal(v0.V4S(), v1.V4H(), v2.H(), 0),
                 "sqdmlal v0.4s, v1.4h, v2.h[0]");
@@ -2397,8 +2472,11 @@ TEST(neon_byelement) {
                 "sqdmlal v0.2d, v1.2s, v2.s[0]");
   COMPARE_MACRO(Sqdmlal2(v2.V2D(), v3.V4S(), v4.S(), 3),
                 "sqdmlal2 v2.2d, v3.4s, v4.s[3]");
+  COMPARE_MACRO(Sqdmlal(v11.V2D(), v17.V2S(), v31.S(), 1),
+                "sqdmlal v11.2d, v17.2s, v31.s[1]");
   COMPARE_MACRO(Sqdmlal(s0, h1, v2.H(), 0), "sqdmlal s0, h1, v2.h[0]");
   COMPARE_MACRO(Sqdmlal(d0, s1, v2.S(), 0), "sqdmlal d0, s1, v2.s[0]");
+  COMPARE_MACRO(Sqdmlal(d0, s1, v31.S(), 0), "sqdmlal d0, s1, v31.s[0]");
 
   COMPARE_MACRO(Sqdmlsl(v0.V4S(), v1.V4H(), v2.H(), 0),
                 "sqdmlsl v0.4s, v1.4h, v2.h[0]");
@@ -2408,8 +2486,11 @@ TEST(neon_byelement) {
                 "sqdmlsl v0.2d, v1.2s, v2.s[0]");
   COMPARE_MACRO(Sqdmlsl2(v2.V2D(), v3.V4S(), v4.S(), 3),
                 "sqdmlsl2 v2.2d, v3.4s, v4.s[3]");
+  COMPARE_MACRO(Sqdmlsl(v11.V2D(), v17.V2S(), v31.S(), 1),
+                "sqdmlsl v11.2d, v17.2s, v31.s[1]");
   COMPARE_MACRO(Sqdmlsl(s0, h1, v2.H(), 0), "sqdmlsl s0, h1, v2.h[0]");
   COMPARE_MACRO(Sqdmlsl(d0, s1, v2.S(), 0), "sqdmlsl d0, s1, v2.s[0]");
+  COMPARE_MACRO(Sqdmlsl(d0, s1, v31.S(), 0), "sqdmlsl d0, s1, v31.s[0]");
 
   // FMLAL and so on are special cases in that the {2} variants operate
   // independently from the lane count.
@@ -2434,10 +2515,14 @@ TEST(neon_byelement) {
                 "sudot v10.2s, v21.8b, v31.4b[0]");
   COMPARE_MACRO(Sudot(v12.V4S(), v23.V16B(), v16.S4B(), 3),
                 "sudot v12.4s, v23.16b, v16.4b[3]");
+  COMPARE_MACRO(Sudot(v11.V2S(), v17.V8B(), v31.S4B(), 1),
+                "sudot v11.2s, v17.8b, v31.4b[1]");
   COMPARE_MACRO(Usdot(v10.V2S(), v21.V8B(), v31.S4B(), 0),
                 "usdot v10.2s, v21.8b, v31.4b[0]");
   COMPARE_MACRO(Usdot(v12.V4S(), v23.V16B(), v16.S4B(), 3),
                 "usdot v12.4s, v23.16b, v16.4b[3]");
+  COMPARE_MACRO(Usdot(v11.V2S(), v17.V8B(), v31.S4B(), 1),
+                "usdot v11.2s, v17.8b, v31.4b[1]");
 
   CLEANUP();
 }
@@ -2454,13 +2539,19 @@ TEST(neon_fp_byelement) {
                 "fmul v0.2s, v1.2s, v2.s[0]");
   COMPARE_MACRO(Fmul(v2.V4S(), v3.V4S(), v15.S(), 3),
                 "fmul v2.4s, v3.4s, v15.s[3]");
+  COMPARE_MACRO(Fmul(v2.V4S(), v3.V4S(), v31.S(), 3),
+                "fmul v2.4s, v3.4s, v31.s[3]");
   COMPARE_MACRO(Fmul(v0.V2D(), v1.V2D(), v2.D(), 0),
                 "fmul v0.2d, v1.2d, v2.d[0]");
   COMPARE_MACRO(Fmul(v0.V2D(), v1.V2D(), v2.D(), 1),
                 "fmul v0.2d, v1.2d, v2.d[1]");
-  COMPARE_MACRO(Fmul(d0, d1, v2.D(), 0), "fmul d0, d1, v2.d[0]");
-  COMPARE_MACRO(Fmul(s0, s1, v2.S(), 0), "fmul s0, s1, v2.s[0]");
+  COMPARE_MACRO(Fmul(v0.V2D(), v1.V2D(), v31.D(), 1),
+                "fmul v0.2d, v1.2d, v31.d[1]");
   COMPARE_MACRO(Fmul(h0, h1, v2.H(), 0), "fmul h0, h1, v2.h[0]");
+  COMPARE_MACRO(Fmul(s0, s1, v2.S(), 0), "fmul s0, s1, v2.s[0]");
+  COMPARE_MACRO(Fmul(s0, s1, v31.S(), 0), "fmul s0, s1, v31.s[0]");
+  COMPARE_MACRO(Fmul(d0, d1, v2.D(), 0), "fmul d0, d1, v2.d[0]");
+  COMPARE_MACRO(Fmul(d0, d1, v31.D(), 0), "fmul d0, d1, v31.d[0]");
 
   COMPARE_MACRO(Fmla(v0.V4H(), v1.V4H(), v2.H(), 0),
                 "fmla v0.4h, v1.4h, v2.h[0]");
@@ -2470,13 +2561,19 @@ TEST(neon_fp_byelement) {
                 "fmla v0.2s, v1.2s, v2.s[0]");
   COMPARE_MACRO(Fmla(v2.V4S(), v3.V4S(), v15.S(), 3),
                 "fmla v2.4s, v3.4s, v15.s[3]");
+  COMPARE_MACRO(Fmla(v2.V4S(), v3.V4S(), v31.S(), 3),
+                "fmla v2.4s, v3.4s, v31.s[3]");
   COMPARE_MACRO(Fmla(v0.V2D(), v1.V2D(), v2.D(), 0),
                 "fmla v0.2d, v1.2d, v2.d[0]");
-  COMPARE_MACRO(Fmla(v0.V2D(), v1.V2D(), v2.D(), 1),
-                "fmla v0.2d, v1.2d, v2.d[1]");
-  COMPARE_MACRO(Fmla(d0, d1, v2.D(), 0), "fmla d0, d1, v2.d[0]");
-  COMPARE_MACRO(Fmla(s0, s1, v2.S(), 0), "fmla s0, s1, v2.s[0]");
+  COMPARE_MACRO(Fmla(v0.V2D(), v1.V2D(), v15.D(), 1),
+                "fmla v0.2d, v1.2d, v15.d[1]");
+  COMPARE_MACRO(Fmla(v0.V2D(), v1.V2D(), v31.D(), 1),
+                "fmla v0.2d, v1.2d, v31.d[1]");
   COMPARE_MACRO(Fmla(h0, h1, v2.H(), 0), "fmla h0, h1, v2.h[0]");
+  COMPARE_MACRO(Fmla(s0, s1, v2.S(), 0), "fmla s0, s1, v2.s[0]");
+  COMPARE_MACRO(Fmla(s0, s1, v31.S(), 0), "fmla s0, s1, v31.s[0]");
+  COMPARE_MACRO(Fmla(d0, d1, v2.D(), 0), "fmla d0, d1, v2.d[0]");
+  COMPARE_MACRO(Fmla(d0, d1, v31.D(), 0), "fmla d0, d1, v31.d[0]");
 
   COMPARE_MACRO(Fmls(v0.V4H(), v1.V4H(), v2.H(), 0),
                 "fmls v0.4h, v1.4h, v2.h[0]");
@@ -2486,13 +2583,19 @@ TEST(neon_fp_byelement) {
                 "fmls v0.2s, v1.2s, v2.s[0]");
   COMPARE_MACRO(Fmls(v2.V4S(), v3.V4S(), v15.S(), 3),
                 "fmls v2.4s, v3.4s, v15.s[3]");
+  COMPARE_MACRO(Fmls(v2.V4S(), v3.V4S(), v31.S(), 3),
+                "fmls v2.4s, v3.4s, v31.s[3]");
   COMPARE_MACRO(Fmls(v0.V2D(), v1.V2D(), v2.D(), 0),
                 "fmls v0.2d, v1.2d, v2.d[0]");
-  COMPARE_MACRO(Fmls(v0.V2D(), v1.V2D(), v2.D(), 1),
-                "fmls v0.2d, v1.2d, v2.d[1]");
-  COMPARE_MACRO(Fmls(d0, d1, v2.D(), 0), "fmls d0, d1, v2.d[0]");
-  COMPARE_MACRO(Fmls(s0, s1, v2.S(), 0), "fmls s0, s1, v2.s[0]");
+  COMPARE_MACRO(Fmls(v0.V2D(), v1.V2D(), v15.D(), 1),
+                "fmls v0.2d, v1.2d, v15.d[1]");
+  COMPARE_MACRO(Fmls(v0.V2D(), v1.V2D(), v31.D(), 1),
+                "fmls v0.2d, v1.2d, v31.d[1]");
   COMPARE_MACRO(Fmls(h0, h1, v2.H(), 0), "fmls h0, h1, v2.h[0]");
+  COMPARE_MACRO(Fmls(s0, s1, v2.S(), 0), "fmls s0, s1, v2.s[0]");
+  COMPARE_MACRO(Fmls(s0, s1, v31.S(), 0), "fmls s0, s1, v31.s[0]");
+  COMPARE_MACRO(Fmls(d0, d1, v2.D(), 0), "fmls d0, d1, v2.d[0]");
+  COMPARE_MACRO(Fmls(d0, d1, v31.D(), 0), "fmls d0, d1, v31.d[0]");
 
   COMPARE_MACRO(Fmulx(v0.V4H(), v1.V4H(), v2.H(), 0),
                 "fmulx v0.4h, v1.4h, v2.h[0]");
@@ -2502,22 +2605,39 @@ TEST(neon_fp_byelement) {
                 "fmulx v0.2s, v1.2s, v2.s[0]");
   COMPARE_MACRO(Fmulx(v2.V4S(), v3.V4S(), v8.S(), 3),
                 "fmulx v2.4s, v3.4s, v8.s[3]");
+  COMPARE_MACRO(Fmulx(v2.V4S(), v3.V4S(), v31.S(), 3),
+                "fmulx v2.4s, v3.4s, v31.s[3]");
   COMPARE_MACRO(Fmulx(v0.V2D(), v1.V2D(), v2.D(), 0),
                 "fmulx v0.2d, v1.2d, v2.d[0]");
-  COMPARE_MACRO(Fmulx(v0.V2D(), v1.V2D(), v2.D(), 1),
-                "fmulx v0.2d, v1.2d, v2.d[1]");
-  COMPARE_MACRO(Fmulx(d0, d1, v2.D(), 0), "fmulx d0, d1, v2.d[0]");
-  COMPARE_MACRO(Fmulx(s0, s1, v2.S(), 0), "fmulx s0, s1, v2.s[0]");
+  COMPARE_MACRO(Fmulx(v0.V2D(), v1.V2D(), v15.D(), 1),
+                "fmulx v0.2d, v1.2d, v15.d[1]");
+  COMPARE_MACRO(Fmulx(v0.V2D(), v1.V2D(), v31.D(), 1),
+                "fmulx v0.2d, v1.2d, v31.d[1]");
   COMPARE_MACRO(Fmulx(h0, h1, v2.H(), 0), "fmulx h0, h1, v2.h[0]");
+  COMPARE_MACRO(Fmulx(s0, s1, v2.S(), 0), "fmulx s0, s1, v2.s[0]");
+  COMPARE_MACRO(Fmulx(s0, s1, v31.S(), 0), "fmulx s0, s1, v31.s[0]");
+  COMPARE_MACRO(Fmulx(d0, d1, v2.D(), 0), "fmulx d0, d1, v2.d[0]");
+  COMPARE_MACRO(Fmulx(d0, d1, v31.D(), 0), "fmulx d0, d1, v31.d[0]");
 
   COMPARE_MACRO(Fcmla(v0.V4S(), v1.V4S(), v2.S(), 0, 270),
                 "fcmla v0.4s, v1.4s, v2.s[0], #270");
   COMPARE_MACRO(Fcmla(v0.V4S(), v1.V4S(), v2.S(), 1, 180),
                 "fcmla v0.4s, v1.4s, v2.s[1], #180");
+  COMPARE_MACRO(Fcmla(v0.V4S(), v1.V4S(), v31.S(), 1, 180),
+                "fcmla v0.4s, v1.4s, v31.s[1], #180");
   COMPARE_MACRO(Fcmla(v0.V4H(), v1.V4H(), v2.H(), 2, 90),
                 "fcmla v0.4h, v1.4h, v2.h[2], #90");
   COMPARE_MACRO(Fcmla(v0.V8H(), v1.V8H(), v2.H(), 3, 0),
                 "fcmla v0.8h, v1.8h, v2.h[3], #0");
+  COMPARE_MACRO(Fcmla(v0.V8H(), v1.V8H(), v31.H(), 3, 0),
+                "fcmla v0.8h, v1.8h, v31.h[3], #0");
+
+  // Check unallocated vector types for FCMLA.
+  COMPARE(dci(0x2f001000), "unallocated (Unallocated)");  // 8B
+  COMPARE(dci(0x6f001000), "unallocated (Unallocated)");  // 16B
+  COMPARE(dci(0x2f801000), "unallocated (Unallocated)");  // 2S
+  COMPARE(dci(0x2fc01000), "unallocated (Unallocated)");  // 1D
+  COMPARE(dci(0x6fc01000), "unallocated (Unallocated)");  // 2D
 
   CLEANUP();
 }
@@ -2829,6 +2949,10 @@ TEST(neon_3different) {
                 "pmull v0.8h, v1.8b, v2.8b");
   COMPARE_MACRO(Pmull2(v2.V8H(), v3.V16B(), v4.V16B()),
                 "pmull2 v2.8h, v3.16b, v4.16b");
+  COMPARE_MACRO(Pmull(v5.V1Q(), v6.V1D(), v7.V1D()),
+                "pmull v5.1q, v6.1d, v7.1d");
+  COMPARE_MACRO(Pmull2(v8.V1Q(), v9.V2D(), v10.V2D()),
+                "pmull2 v8.1q, v9.2d, v10.2d");
 
   CLEANUP();
 }
@@ -3124,7 +3248,7 @@ TEST(neon_modimm) {
   COMPARE_MACRO(Movi(v2.V2D(), 0xff00ff00ff00ff, 0xff00ff00ff00ff),
                 "movi v2.2d, #0xff00ff00ff00ff");
   COMPARE_MACRO(Movi(v3.V2D(), 0xffff, 0xff00ff00ff00ff),
-                "movi v3.2d, #0xff00ff00ff00ff\n"
+                "movi d3, #0xff00ff00ff00ff\n"
                 "mov x16, #0xffff\n"
                 "mov v3.d[1], x16");
 
@@ -4392,6 +4516,100 @@ TEST(neon_matmul) {
   CLEANUP();
 }
 
+TEST(neon_sha3) {
+  SETUP();
+
+  COMPARE_MACRO(Bcax(v0.V16B(), v1.V16B(), v2.V16B(), v3.V16B()),
+                "bcax v0.16b, v1.16b, v2.16b, v3.16b");
+  COMPARE_MACRO(Eor3(v10.V16B(), v11.V16B(), v12.V16B(), v13.V16B()),
+                "eor3 v10.16b, v11.16b, v12.16b, v13.16b");
+  COMPARE_MACRO(Xar(v20.V2D(), v21.V2D(), v22.V2D(), 42),
+                "xar v20.2d, v21.2d, v22.2d, #42");
+  COMPARE_MACRO(Rax1(v0.V2D(), v1.V2D(), v2.V2D()), "rax1 v0.2d, v1.2d, v2.2d");
+
+  CLEANUP();
+}
+
+TEST(neon_sha1) {
+  SETUP();
+
+  COMPARE_MACRO(Sha1c(q0, s12, v20.V4S()), "sha1c q0, s12, v20.4s");
+  COMPARE_MACRO(Sha1m(q22, s2, v13.V4S()), "sha1m q22, s2, v13.4s");
+  COMPARE_MACRO(Sha1p(q31, s5, v15.V4S()), "sha1p q31, s5, v15.4s");
+  COMPARE_MACRO(Sha1su0(v19.V4S(), v9.V4S(), v27.V4S()),
+                "sha1su0 v19.4s, v9.4s, v27.4s");
+  COMPARE_MACRO(Sha1h(s12, s0), "sha1h s12, s0");
+  COMPARE_MACRO(Sha1su1(v2.V4S(), v4.V4S()), "sha1su1 v2.4s, v4.4s");
+
+  CLEANUP();
+}
+
+TEST(neon_sha2) {
+  SETUP();
+
+  COMPARE_MACRO(Sha256h(q0, q12, v20.V4S()), "sha256h q0, q12, v20.4s");
+  COMPARE_MACRO(Sha256h2(q22, q2, v13.V4S()), "sha256h2 q22, q2, v13.4s");
+  COMPARE_MACRO(Sha256su0(v2.V4S(), v4.V4S()), "sha256su0 v2.4s, v4.4s");
+  COMPARE_MACRO(Sha256su1(v19.V4S(), v9.V4S(), v27.V4S()),
+                "sha256su1 v19.4s, v9.4s, v27.4s");
+
+  CLEANUP();
+}
+
+TEST(neon_sha512) {
+  SETUP();
+
+  COMPARE_MACRO(Sha512h(q0, q12, v20.V2D()), "sha512h q0, q12, v20.2d");
+  COMPARE_MACRO(Sha512h2(q22, q2, v13.V2D()), "sha512h2 q22, q2, v13.2d");
+  COMPARE_MACRO(Sha512su0(v2.V2D(), v4.V2D()), "sha512su0 v2.2d, v4.2d");
+  COMPARE_MACRO(Sha512su1(v19.V2D(), v9.V2D(), v27.V2D()),
+                "sha512su1 v19.2d, v9.2d, v27.2d");
+
+  CLEANUP();
+}
+
+TEST(neon_aes) {
+  SETUP();
+
+  COMPARE_MACRO(Aesd(v0.V16B(), v29.V16B()), "aesd v0.16b, v29.16b");
+  COMPARE_MACRO(Aese(v0.V16B(), v29.V16B()), "aese v0.16b, v29.16b");
+  COMPARE_MACRO(Aesimc(v0.V16B(), v29.V16B()), "aesimc v0.16b, v29.16b");
+  COMPARE_MACRO(Aesmc(v0.V16B(), v29.V16B()), "aesmc v0.16b, v29.16b");
+
+  CLEANUP();
+}
+
+TEST(neon_sm3) {
+  SETUP();
+
+  COMPARE_MACRO(Sm3partw1(v12.V4S(), v13.V4S(), v14.V4S()),
+                "sm3partw1 v12.4s, v13.4s, v14.4s");
+  COMPARE_MACRO(Sm3partw2(v12.V4S(), v13.V4S(), v14.V4S()),
+                "sm3partw2 v12.4s, v13.4s, v14.4s");
+  COMPARE_MACRO(Sm3ss1(v13.V4S(), v15.V4S(), v17.V4S(), v21.V4S()),
+                "sm3ss1 v13.4s, v15.4s, v17.4s, v21.4s");
+  COMPARE_MACRO(Sm3tt1a(v30.V4S(), v29.V4S(), v9.V4S(), 1),
+                "sm3tt1a v30.4s, v29.4s, v9.s[1]");
+  COMPARE_MACRO(Sm3tt1b(v30.V4S(), v29.V4S(), v9.V4S(), 3),
+                "sm3tt1b v30.4s, v29.4s, v9.s[3]");
+  COMPARE_MACRO(Sm3tt2a(v30.V4S(), v29.V4S(), v9.V4S(), 2),
+                "sm3tt2a v30.4s, v29.4s, v9.s[2]");
+  COMPARE_MACRO(Sm3tt2b(v30.V4S(), v29.V4S(), v9.V4S(), 0),
+                "sm3tt2b v30.4s, v29.4s, v9.s[0]");
+
+  CLEANUP();
+}
+
+TEST(neon_sm4) {
+  SETUP();
+
+  COMPARE_MACRO(Sm4e(v12.V4S(), v13.V4S()), "sm4e v12.4s, v13.4s");
+  COMPARE_MACRO(Sm4ekey(v12.V4S(), v13.V4S(), v14.V4S()),
+                "sm4ekey v12.4s, v13.4s, v14.4s");
+
+  CLEANUP();
+}
+
 TEST(neon_unallocated_regression_test) {
   SETUP();
 
@@ -4487,8 +4705,6 @@ TEST(neon_unallocated_regression_test) {
   COMPARE_PREFIX(dci(0x2efb9dbd), "unallocated");  // pmul v.und, v.und, v.und
   COMPARE_PREFIX(dci(0x4eace101), "unallocated");  // pmull v.d, v.s, v.s
   COMPARE_PREFIX(dci(0x0e6de3ad), "unallocated");  // pmull v.s, v.h, v.h
-  COMPARE_PREFIX(dci(0x4ee3e2c0), "unallocated");  // pmull v.und, v.d, v.d
-  COMPARE_PREFIX(dci(0x0eede060), "unallocated");  // pmull v.und, v.und, v.und
   COMPARE_PREFIX(dci(0x6ee00afd), "unallocated");  // rev v.d, v.d
   COMPARE_PREFIX(dci(0x4e601975), "unallocated");  // rev v.h, v.h
   COMPARE_PREFIX(dci(0x4ea019f3), "unallocated");  // rev v.s, v.s
@@ -4558,10 +4774,14 @@ TEST(neon_unallocated_regression_test) {
   COMPARE_PREFIX(dci(0x6fd6d80f), "unallocated");  // sqrdmlah v.d, v.d, v.d[]
   COMPARE_PREFIX(dci(0x2fecdae5),
                  "unallocated");  // sqrdmlah v.und, v.und, v.d[]
+  COMPARE_PREFIX(dci(0x7e008429), "unallocated");  // sqrdmlah b9, b1, b0
+  COMPARE_PREFIX(dci(0x7ec08429), "unallocated");  // sqrdmlah d9, d1, d0
   COMPARE_PREFIX(dci(0x7fe0f992), "unallocated");  // sqrdmlsh d, d, v.d[]
   COMPARE_PREFIX(dci(0x6ff1f9df), "unallocated");  // sqrdmlsh v.d, v.d, v.d[]
   COMPARE_PREFIX(dci(0x2fcdfad1),
                  "unallocated");  // sqrdmlsh v.und, v.und, v.d[]
+  COMPARE_PREFIX(dci(0x7e008c29), "unallocated");  // sqrdmlsh b9, b1, b0
+  COMPARE_PREFIX(dci(0x7ec08c29), "unallocated");  // sqrdmlsh d9, d1, d0
   COMPARE_PREFIX(dci(0x7e23b7fa), "unallocated");  // sqrdmulh b, b, b
   COMPARE_PREFIX(dci(0x5f1ad272), "unallocated");  // sqrdmulh b, b, v.b[]
   COMPARE_PREFIX(dci(0x7ef8b6e0), "unallocated");  // sqrdmulh d, d, d

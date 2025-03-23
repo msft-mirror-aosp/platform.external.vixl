@@ -119,7 +119,7 @@ const uint64_t kTTBRMask = UINT64_C(1) << 55;
 
 // We can't define a static kZRegSize because the size depends on the
 // implementation. However, it is sometimes useful to know the minimum and
-// maxmimum possible sizes.
+// maximum possible sizes.
 const unsigned kZRegMinSize = 128;
 const unsigned kZRegMinSizeLog2 = 7;
 const unsigned kZRegMinSizeInBytes = kZRegMinSize / 8;
@@ -141,21 +141,25 @@ const unsigned kPRegMaxSizeLog2 = kZRegMaxSizeLog2 - 3;
 const unsigned kPRegMaxSizeInBytes = kPRegMaxSize / 8;
 const unsigned kPRegMaxSizeInBytesLog2 = kPRegMaxSizeLog2 - 3;
 
+const unsigned kMTETagGranuleInBytes = 16;
+const unsigned kMTETagGranuleInBytesLog2 = 4;
+const unsigned kMTETagWidth = 4;
+
 // Make these moved float constants backwards compatible
 // with explicit vixl::aarch64:: namespace references.
-using vixl::kDoubleMantissaBits;
 using vixl::kDoubleExponentBits;
-using vixl::kFloatMantissaBits;
-using vixl::kFloatExponentBits;
-using vixl::kFloat16MantissaBits;
+using vixl::kDoubleMantissaBits;
 using vixl::kFloat16ExponentBits;
+using vixl::kFloat16MantissaBits;
+using vixl::kFloatExponentBits;
+using vixl::kFloatMantissaBits;
 
-using vixl::kFP16PositiveInfinity;
 using vixl::kFP16NegativeInfinity;
-using vixl::kFP32PositiveInfinity;
+using vixl::kFP16PositiveInfinity;
 using vixl::kFP32NegativeInfinity;
-using vixl::kFP64PositiveInfinity;
+using vixl::kFP32PositiveInfinity;
 using vixl::kFP64NegativeInfinity;
+using vixl::kFP64PositiveInfinity;
 
 using vixl::kFP16DefaultNaN;
 using vixl::kFP32DefaultNaN;
@@ -213,9 +217,10 @@ enum VectorFormat {
   kFormatVnQ = kFormatSVEQ | kFormatSVE,
   kFormatVnO = kFormatSVEO | kFormatSVE,
 
-  // An artificial value, used by simulator trace tests and a few oddball
+  // Artificial values, used by simulator trace tests and a few oddball
   // instructions (such as FMLAL).
-  kFormat2H = 0xfffffffe
+  kFormat2H = 0xfffffffe,
+  kFormat1Q = 0xfffffffd
 };
 
 // Instructions. ---------------------------------------------------------------
@@ -368,6 +373,7 @@ class Instruction {
 
   std::pair<int, int> GetSVEPermuteIndexAndLaneSizeLog2() const;
 
+  std::pair<int, int> GetNEONMulRmAndIndex() const;
   std::pair<int, int> GetSVEMulZmAndIndex() const;
   std::pair<int, int> GetSVEMulLongZmAndIndex() const;
 
@@ -510,6 +516,65 @@ class Instruction {
       }
     }
     return false;
+  }
+
+  bool IsMOPSPrologueOf(const Instruction* instr, uint32_t mops_type) const {
+    VIXL_ASSERT((mops_type == "set"_h) || (mops_type == "setg"_h) ||
+                (mops_type == "cpy"_h));
+    const int op_lsb = (mops_type == "cpy"_h) ? 22 : 14;
+    return GetInstructionBits() == instr->Mask(~(0x3U << op_lsb));
+  }
+
+  bool IsMOPSMainOf(const Instruction* instr, uint32_t mops_type) const {
+    VIXL_ASSERT((mops_type == "set"_h) || (mops_type == "setg"_h) ||
+                (mops_type == "cpy"_h));
+    const int op_lsb = (mops_type == "cpy"_h) ? 22 : 14;
+    return GetInstructionBits() ==
+           (instr->Mask(~(0x3U << op_lsb)) | (0x1 << op_lsb));
+  }
+
+  bool IsMOPSEpilogueOf(const Instruction* instr, uint32_t mops_type) const {
+    VIXL_ASSERT((mops_type == "set"_h) || (mops_type == "setg"_h) ||
+                (mops_type == "cpy"_h));
+    const int op_lsb = (mops_type == "cpy"_h) ? 22 : 14;
+    return GetInstructionBits() ==
+           (instr->Mask(~(0x3U << op_lsb)) | (0x2 << op_lsb));
+  }
+
+  template <uint32_t mops_type>
+  bool IsConsistentMOPSTriplet() const {
+    VIXL_STATIC_ASSERT((mops_type == "set"_h) || (mops_type == "setg"_h) ||
+                       (mops_type == "cpy"_h));
+
+    int64_t isize = static_cast<int64_t>(kInstructionSize);
+    const Instruction* prev2 = GetInstructionAtOffset(-2 * isize);
+    const Instruction* prev1 = GetInstructionAtOffset(-1 * isize);
+    const Instruction* next1 = GetInstructionAtOffset(1 * isize);
+    const Instruction* next2 = GetInstructionAtOffset(2 * isize);
+
+    // Use the encoding of the current instruction to determine the expected
+    // adjacent instructions. NB. this doesn't check if the nearby instructions
+    // are MOPS-type, but checks that they form a consistent triplet if they
+    // are. For example, 'mov x0, #0; mov x0, #512; mov x0, #1024' is a
+    // consistent triplet, but they are not MOPS instructions.
+    const int op_lsb = (mops_type == "cpy"_h) ? 22 : 14;
+    const uint32_t kMOPSOpfield = 0x3 << op_lsb;
+    const uint32_t kMOPSPrologue = 0;
+    const uint32_t kMOPSMain = 0x1 << op_lsb;
+    const uint32_t kMOPSEpilogue = 0x2 << op_lsb;
+    switch (Mask(kMOPSOpfield)) {
+      case kMOPSPrologue:
+        return next1->IsMOPSMainOf(this, mops_type) &&
+               next2->IsMOPSEpilogueOf(this, mops_type);
+      case kMOPSMain:
+        return prev1->IsMOPSPrologueOf(this, mops_type) &&
+               next1->IsMOPSEpilogueOf(this, mops_type);
+      case kMOPSEpilogue:
+        return prev2->IsMOPSPrologueOf(this, mops_type) &&
+               prev1->IsMOPSMainOf(this, mops_type);
+      default:
+        VIXL_ABORT_WITH_MSG("Undefined MOPS operation\n");
+    }
   }
 
   static int GetImmBranchRangeBitwidth(ImmBranchType branch_type);
@@ -764,7 +829,7 @@ class NEONFormatDecoder {
   enum SubstitutionMode { kPlaceholder, kFormat };
 
   // Construct a format decoder with increasingly specific format maps for each
-  // subsitution. If no format map is specified, the default is the integer
+  // substitution. If no format map is specified, the default is the integer
   // format map.
   explicit NEONFormatDecoder(const Instruction* instr) {
     instrbits_ = instr->GetInstructionBits();
@@ -791,11 +856,13 @@ class NEONFormatDecoder {
   // Set the format mapping for all or individual substitutions.
   void SetFormatMaps(const NEONFormatMap* format0,
                      const NEONFormatMap* format1 = NULL,
-                     const NEONFormatMap* format2 = NULL) {
+                     const NEONFormatMap* format2 = NULL,
+                     const NEONFormatMap* format3 = NULL) {
     VIXL_ASSERT(format0 != NULL);
     formats_[0] = format0;
     formats_[1] = (format1 == NULL) ? formats_[0] : format1;
     formats_[2] = (format2 == NULL) ? formats_[1] : format2;
+    formats_[3] = (format3 == NULL) ? formats_[2] : format3;
   }
   void SetFormatMap(unsigned index, const NEONFormatMap* format) {
     VIXL_ASSERT(index <= ArrayLength(formats_));
@@ -814,12 +881,15 @@ class NEONFormatDecoder {
   const char* Substitute(const char* string,
                          SubstitutionMode mode0 = kFormat,
                          SubstitutionMode mode1 = kFormat,
-                         SubstitutionMode mode2 = kFormat) {
+                         SubstitutionMode mode2 = kFormat,
+                         SubstitutionMode mode3 = kFormat) {
     const char* subst0 = GetSubstitute(0, mode0);
     const char* subst1 = GetSubstitute(1, mode1);
     const char* subst2 = GetSubstitute(2, mode2);
+    const char* subst3 = GetSubstitute(3, mode3);
 
-    if ((subst0 == NULL) || (subst1 == NULL) || (subst2 == NULL)) {
+    if ((subst0 == NULL) || (subst1 == NULL) || (subst2 == NULL) ||
+        (subst3 == NULL)) {
       return NULL;
     }
 
@@ -828,7 +898,8 @@ class NEONFormatDecoder {
              string,
              subst0,
              subst1,
-             subst2);
+             subst2,
+             subst3);
     return form_buffer_;
   }
 
@@ -1066,7 +1137,7 @@ class NEONFormatDecoder {
   }
 
   Instr instrbits_;
-  const NEONFormatMap* formats_[3];
+  const NEONFormatMap* formats_[4];
   char form_buffer_[64];
   char mne_buffer_[16];
 };

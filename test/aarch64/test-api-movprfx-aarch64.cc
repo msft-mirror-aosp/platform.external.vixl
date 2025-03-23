@@ -30,10 +30,10 @@
 
 #include "test-runner.h"
 #include "test-utils.h"
-#include "aarch64/test-utils-aarch64.h"
 
 #include "aarch64/assembler-aarch64.h"
 #include "aarch64/instructions-aarch64.h"
+#include "aarch64/test-utils-aarch64.h"
 
 #define __ assm.
 #define TEST(name) TEST_(AARCH64_API_##name)
@@ -50,7 +50,7 @@ class InstructionReporter : public DecoderVisitor {
     instr_form_ = (*metadata)["form"];
   }
 
-  std::string MoveForm() { return std::move(instr_form_); }
+  std::string MoveForm() { return instr_form_; }
 
  private:
   std::string instr_form_;
@@ -1424,6 +1424,9 @@ TEST(movprfx_positive) {
     __ movprfx(z15, z18);
     __ eor(z15.VnH(), z15.VnH(), 4);
 
+    __ movprfx(z17, z30);
+    __ ext(z17.VnB(), z17.VnB(), z18.VnB(), 2);
+
     __ movprfx(z19, z28);
     __ incd(z19.VnD(), SVE_MUL3);
 
@@ -2409,7 +2412,7 @@ TEST(movprfx_negative_instructions_sve2) {
   {
     // We have to use the Assembler directly to generate movprfx, so we need
     // to manually reserve space for the code we're about to emit.
-    static const size_t kPairCount = 133;
+    static const size_t kPairCount = 134;
     CodeBufferCheckScope guard(&assm, kPairCount * 2 * kInstructionSize);
 
     __ movprfx(z29, z30);
@@ -2579,6 +2582,9 @@ TEST(movprfx_negative_instructions_sve2) {
 
     __ movprfx(z31, z0);
     __ smullt(z31.VnD(), z26.VnS(), z5.VnS(), 0);
+
+    __ movprfx(z4, z5);
+    __ splice_con(z4.VnB(), p7.Merging(), z0.VnB(), z1.VnB());
 
     __ movprfx(z18, z19);
     __ sqdmulh(z18.VnB(), z25.VnB(), z1.VnB());

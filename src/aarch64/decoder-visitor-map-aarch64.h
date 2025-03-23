@@ -1464,8 +1464,6 @@
       {"crc32h_32c_dp_2src"_h, &VISITORCLASS::VisitDataProcessing2Source},     \
       {"crc32w_32c_dp_2src"_h, &VISITORCLASS::VisitDataProcessing2Source},     \
       {"crc32x_64c_dp_2src"_h, &VISITORCLASS::VisitDataProcessing2Source},     \
-      {"gmi_64g_dp_2src"_h, &VISITORCLASS::VisitDataProcessing2Source},        \
-      {"irg_64i_dp_2src"_h, &VISITORCLASS::VisitDataProcessing2Source},        \
       {"lslv_32_dp_2src"_h, &VISITORCLASS::VisitDataProcessing2Source},        \
       {"lslv_64_dp_2src"_h, &VISITORCLASS::VisitDataProcessing2Source},        \
       {"lsrv_32_dp_2src"_h, &VISITORCLASS::VisitDataProcessing2Source},        \
@@ -2076,7 +2074,6 @@
       {"scvtf_asimdmiscfp16_r"_h, &VISITORCLASS::VisitNEON2RegMiscFP16},       \
       {"ucvtf_asimdmiscfp16_r"_h, &VISITORCLASS::VisitNEON2RegMiscFP16},       \
       {"addhn_asimddiff_n"_h, &VISITORCLASS::VisitNEON3Different},             \
-      {"pmull_asimddiff_l"_h, &VISITORCLASS::VisitNEON3Different},             \
       {"raddhn_asimddiff_n"_h, &VISITORCLASS::VisitNEON3Different},            \
       {"rsubhn_asimddiff_n"_h, &VISITORCLASS::VisitNEON3Different},            \
       {"sabal_asimddiff_l"_h, &VISITORCLASS::VisitNEON3Different},             \
@@ -2594,8 +2591,8 @@
       {"dmb_bo_barriers"_h, &VISITORCLASS::VisitSystem},                       \
       {"dsb_bo_barriers"_h, &VISITORCLASS::VisitSystem},                       \
       {"hint_hm_hints"_h, &VISITORCLASS::VisitSystem},                         \
+      {"chkfeat_hf_hints"_h, &VISITORCLASS::VisitSystem},                      \
       {"mrs_rs_systemmove"_h, &VISITORCLASS::VisitSystem},                     \
-      {"msr_si_pstate"_h, &VISITORCLASS::VisitSystem},                         \
       {"msr_sr_systemmove"_h, &VISITORCLASS::VisitSystem},                     \
       {"psb_hc_hints"_h, &VISITORCLASS::VisitSystem},                          \
       {"sb_only_barriers"_h, &VISITORCLASS::VisitSystem},                      \
@@ -2641,19 +2638,15 @@
        &VISITORCLASS::VisitUnconditionalBranchToRegister},                     \
       {"ret_64r_branch_reg"_h,                                                 \
        &VISITORCLASS::VisitUnconditionalBranchToRegister},                     \
-      {"addg_64_addsub_immtags"_h, &VISITORCLASS::VisitUnimplemented},         \
-      {"bcax_vvv16_crypto4"_h, &VISITORCLASS::VisitUnimplemented},             \
       {"bfcvtn_asimdmisc_4s"_h, &VISITORCLASS::VisitUnimplemented},            \
       {"bfdot_asimdelem_e"_h, &VISITORCLASS::VisitUnimplemented},              \
       {"bfdot_asimdsame2_d"_h, &VISITORCLASS::VisitUnimplemented},             \
       {"bfmlal_asimdelem_f"_h, &VISITORCLASS::VisitUnimplemented},             \
-      {"bfmlal_asimdsame2_f_"_h, &VISITORCLASS::VisitUnimplemented},           \
+      {"bfmlal_asimdsame2_f"_h, &VISITORCLASS::VisitUnimplemented},            \
       {"bfmmla_asimdsame2_e"_h, &VISITORCLASS::VisitUnimplemented},            \
       {"dsb_bon_barriers"_h, &VISITORCLASS::VisitUnimplemented},               \
-      {"eor3_vvv16_crypto4"_h, &VISITORCLASS::VisitUnimplemented},             \
       {"ld64b_64l_memop"_h, &VISITORCLASS::VisitUnimplemented},                \
       {"ldgm_64bulk_ldsttags"_h, &VISITORCLASS::VisitUnimplemented},           \
-      {"ldg_64loffset_ldsttags"_h, &VISITORCLASS::VisitUnimplemented},         \
       {"ldtrb_32_ldst_unpriv"_h, &VISITORCLASS::VisitUnimplemented},           \
       {"ldtrh_32_ldst_unpriv"_h, &VISITORCLASS::VisitUnimplemented},           \
       {"ldtrsb_32_ldst_unpriv"_h, &VISITORCLASS::VisitUnimplemented},          \
@@ -2663,62 +2656,38 @@
       {"ldtrsw_64_ldst_unpriv"_h, &VISITORCLASS::VisitUnimplemented},          \
       {"ldtr_32_ldst_unpriv"_h, &VISITORCLASS::VisitUnimplemented},            \
       {"ldtr_64_ldst_unpriv"_h, &VISITORCLASS::VisitUnimplemented},            \
-      {"rax1_vvv2_cryptosha512_3"_h, &VISITORCLASS::VisitUnimplemented},       \
-      {"sha512h2_qqv_cryptosha512_3"_h, &VISITORCLASS::VisitUnimplemented},    \
-      {"sha512h_qqv_cryptosha512_3"_h, &VISITORCLASS::VisitUnimplemented},     \
-      {"sha512su0_vv2_cryptosha512_2"_h, &VISITORCLASS::VisitUnimplemented},   \
-      {"sha512su1_vvv2_cryptosha512_3"_h, &VISITORCLASS::VisitUnimplemented},  \
-      {"sm3partw1_vvv4_cryptosha512_3"_h, &VISITORCLASS::VisitUnimplemented},  \
-      {"sm3partw2_vvv4_cryptosha512_3"_h, &VISITORCLASS::VisitUnimplemented},  \
-      {"sm3ss1_vvv4_crypto4"_h, &VISITORCLASS::VisitUnimplemented},            \
-      {"sm3tt1a_vvv4_crypto3_imm2"_h, &VISITORCLASS::VisitUnimplemented},      \
-      {"sm3tt1b_vvv4_crypto3_imm2"_h, &VISITORCLASS::VisitUnimplemented},      \
-      {"sm3tt2a_vvv4_crypto3_imm2"_h, &VISITORCLASS::VisitUnimplemented},      \
-      {"sm3tt2b_vvv_crypto3_imm2"_h, &VISITORCLASS::VisitUnimplemented},       \
-      {"sm4ekey_vvv4_cryptosha512_3"_h, &VISITORCLASS::VisitUnimplemented},    \
-      {"sm4e_vv4_cryptosha512_2"_h, &VISITORCLASS::VisitUnimplemented},        \
-      {"st2g_64soffset_ldsttags"_h, &VISITORCLASS::VisitUnimplemented},        \
-      {"st2g_64spost_ldsttags"_h, &VISITORCLASS::VisitUnimplemented},          \
-      {"st2g_64spre_ldsttags"_h, &VISITORCLASS::VisitUnimplemented},           \
+      {"sm3partw1_vvv4_cryptosha512_3"_h, &VISITORCLASS::VisitCryptoSM3},      \
+      {"sm3partw2_vvv4_cryptosha512_3"_h, &VISITORCLASS::VisitCryptoSM3},      \
+      {"sm3ss1_vvv4_crypto4"_h, &VISITORCLASS::VisitCryptoSM3},                \
+      {"sm3tt1a_vvv4_crypto3_imm2"_h, &VISITORCLASS::VisitCryptoSM3},          \
+      {"sm3tt1b_vvv4_crypto3_imm2"_h, &VISITORCLASS::VisitCryptoSM3},          \
+      {"sm3tt2a_vvv4_crypto3_imm2"_h, &VISITORCLASS::VisitCryptoSM3},          \
+      {"sm3tt2b_vvv_crypto3_imm2"_h, &VISITORCLASS::VisitCryptoSM3},           \
+      {"sm4ekey_vvv4_cryptosha512_3"_h, &VISITORCLASS::VisitCryptoSM4},        \
+      {"sm4e_vv4_cryptosha512_2"_h, &VISITORCLASS::VisitCryptoSM4},            \
       {"st64b_64l_memop"_h, &VISITORCLASS::VisitUnimplemented},                \
       {"st64bv_64_memop"_h, &VISITORCLASS::VisitUnimplemented},                \
       {"st64bv0_64_memop"_h, &VISITORCLASS::VisitUnimplemented},               \
       {"stgm_64bulk_ldsttags"_h, &VISITORCLASS::VisitUnimplemented},           \
-      {"stgp_64_ldstpair_off"_h, &VISITORCLASS::VisitUnimplemented},           \
-      {"stgp_64_ldstpair_post"_h, &VISITORCLASS::VisitUnimplemented},          \
-      {"stgp_64_ldstpair_pre"_h, &VISITORCLASS::VisitUnimplemented},           \
-      {"stg_64soffset_ldsttags"_h, &VISITORCLASS::VisitUnimplemented},         \
-      {"stg_64spost_ldsttags"_h, &VISITORCLASS::VisitUnimplemented},           \
-      {"stg_64spre_ldsttags"_h, &VISITORCLASS::VisitUnimplemented},            \
       {"sttrb_32_ldst_unpriv"_h, &VISITORCLASS::VisitUnimplemented},           \
       {"sttrh_32_ldst_unpriv"_h, &VISITORCLASS::VisitUnimplemented},           \
       {"sttr_32_ldst_unpriv"_h, &VISITORCLASS::VisitUnimplemented},            \
       {"sttr_64_ldst_unpriv"_h, &VISITORCLASS::VisitUnimplemented},            \
-      {"stz2g_64soffset_ldsttags"_h, &VISITORCLASS::VisitUnimplemented},       \
-      {"stz2g_64spost_ldsttags"_h, &VISITORCLASS::VisitUnimplemented},         \
-      {"stz2g_64spre_ldsttags"_h, &VISITORCLASS::VisitUnimplemented},          \
       {"stzgm_64bulk_ldsttags"_h, &VISITORCLASS::VisitUnimplemented},          \
-      {"stzg_64soffset_ldsttags"_h, &VISITORCLASS::VisitUnimplemented},        \
-      {"stzg_64spost_ldsttags"_h, &VISITORCLASS::VisitUnimplemented},          \
-      {"stzg_64spre_ldsttags"_h, &VISITORCLASS::VisitUnimplemented},           \
-      {"subg_64_addsub_immtags"_h, &VISITORCLASS::VisitUnimplemented},         \
-      {"subps_64s_dp_2src"_h, &VISITORCLASS::VisitUnimplemented},              \
-      {"subp_64s_dp_2src"_h, &VISITORCLASS::VisitUnimplemented},               \
       {"tcancel_ex_exception"_h, &VISITORCLASS::VisitUnimplemented},           \
       {"tstart_br_systemresult"_h, &VISITORCLASS::VisitUnimplemented},         \
       {"ttest_br_systemresult"_h, &VISITORCLASS::VisitUnimplemented},          \
       {"wfet_only_systeminstrswithreg"_h, &VISITORCLASS::VisitUnimplemented},  \
       {"wfit_only_systeminstrswithreg"_h, &VISITORCLASS::VisitUnimplemented},  \
-      {"xar_vvv2_crypto3_imm6"_h, &VISITORCLASS::VisitUnimplemented},          \
       {"bfcvt_z_p_z_s2bf"_h, &VISITORCLASS::VisitUnimplemented},               \
       {"bfcvtnt_z_p_z_s2bf"_h, &VISITORCLASS::VisitUnimplemented},             \
-      {"bfdot_z_zzz_"_h, &VISITORCLASS::VisitUnimplemented},                   \
-      {"bfdot_z_zzzi_"_h, &VISITORCLASS::VisitUnimplemented},                  \
-      {"bfmlalb_z_zzz_"_h, &VISITORCLASS::VisitUnimplemented},                 \
-      {"bfmlalb_z_zzzi_"_h, &VISITORCLASS::VisitUnimplemented},                \
-      {"bfmlalt_z_zzz_"_h, &VISITORCLASS::VisitUnimplemented},                 \
-      {"bfmlalt_z_zzzi_"_h, &VISITORCLASS::VisitUnimplemented},                \
-      {"bfmmla_z_zzz_"_h, &VISITORCLASS::VisitUnimplemented}, {                \
+      {"bfdot_z_zzz"_h, &VISITORCLASS::VisitUnimplemented},                    \
+      {"bfdot_z_zzzi"_h, &VISITORCLASS::VisitUnimplemented},                   \
+      {"bfmlalb_z_zzz"_h, &VISITORCLASS::VisitUnimplemented},                  \
+      {"bfmlalb_z_zzzi"_h, &VISITORCLASS::VisitUnimplemented},                 \
+      {"bfmlalt_z_zzz"_h, &VISITORCLASS::VisitUnimplemented},                  \
+      {"bfmlalt_z_zzzi"_h, &VISITORCLASS::VisitUnimplemented},                 \
+      {"bfmmla_z_zzz"_h, &VISITORCLASS::VisitUnimplemented}, {                 \
     "unallocated"_h, &VISITORCLASS::VisitUnallocated                           \
   }
 
@@ -2742,7 +2711,6 @@
       {"pacib1716_hi_hints"_h, &VISITORCLASS::VisitSystem},                    \
       {"pacibsp_hi_hints"_h, &VISITORCLASS::VisitSystem},                      \
       {"pacibz_hi_hints"_h, &VISITORCLASS::VisitSystem},                       \
-      {"pssbb_only_barriers"_h, &VISITORCLASS::VisitSystem},                   \
       {"sev_hi_hints"_h, &VISITORCLASS::VisitSystem},                          \
       {"sevl_hi_hints"_h, &VISITORCLASS::VisitSystem},                         \
       {"ssbb_only_barriers"_h, &VISITORCLASS::VisitSystem},                    \
@@ -2851,6 +2819,7 @@
       {"fmlal_asimdsame_f"_h, &VISITORCLASS::VisitNEON3Same},                  \
       {"fmlsl2_asimdsame_f"_h, &VISITORCLASS::VisitNEON3Same},                 \
       {"fmlsl_asimdsame_f"_h, &VISITORCLASS::VisitNEON3Same},                  \
+      {"pmull_asimddiff_l"_h, &VISITORCLASS::VisitNEON3Different},             \
       {"ushll_asimdshf_l"_h, &VISITORCLASS::VisitNEONShiftImmediate},          \
       {"sshll_asimdshf_l"_h, &VISITORCLASS::VisitNEONShiftImmediate},          \
       {"shrn_asimdshf_n"_h, &VISITORCLASS::VisitNEONShiftImmediate},           \
@@ -2879,22 +2848,6 @@
       {"sqdmlsl_asisdelem_l"_h,                                                \
        &VISITORCLASS::VisitNEONScalarByIndexedElement},                        \
       {"sqdmull_asisdelem_l"_h,                                                \
-       &VISITORCLASS::VisitNEONScalarByIndexedElement},                        \
-      {"fmla_asisdelem_rh_h"_h,                                                \
-       &VISITORCLASS::VisitNEONScalarByIndexedElement},                        \
-      {"fmla_asisdelem_r_sd"_h,                                                \
-       &VISITORCLASS::VisitNEONScalarByIndexedElement},                        \
-      {"fmls_asisdelem_rh_h"_h,                                                \
-       &VISITORCLASS::VisitNEONScalarByIndexedElement},                        \
-      {"fmls_asisdelem_r_sd"_h,                                                \
-       &VISITORCLASS::VisitNEONScalarByIndexedElement},                        \
-      {"fmulx_asisdelem_rh_h"_h,                                               \
-       &VISITORCLASS::VisitNEONScalarByIndexedElement},                        \
-      {"fmulx_asisdelem_r_sd"_h,                                               \
-       &VISITORCLASS::VisitNEONScalarByIndexedElement},                        \
-      {"fmul_asisdelem_rh_h"_h,                                                \
-       &VISITORCLASS::VisitNEONScalarByIndexedElement},                        \
-      {"fmul_asisdelem_r_sd"_h,                                                \
        &VISITORCLASS::VisitNEONScalarByIndexedElement},                        \
       {"fabd_asisdsame_only"_h, &VISITORCLASS::VisitNEONScalar3Same},          \
       {"facge_asisdsame_only"_h, &VISITORCLASS::VisitNEONScalar3Same},         \
@@ -2968,6 +2921,22 @@
       {"frecpe_asisdmisc_r"_h, &VISITORCLASS::VisitNEONScalar2RegMisc},        \
       {"frecpx_asisdmisc_r"_h, &VISITORCLASS::VisitNEONScalar2RegMisc},        \
       {"frsqrte_asisdmisc_r"_h, &VISITORCLASS::VisitNEONScalar2RegMisc},       \
-      {"scvtf_asisdmisc_r"_h, &VISITORCLASS::VisitNEONScalar2RegMisc}, {       \
-    "ucvtf_asisdmisc_r"_h, &VISITORCLASS::VisitNEONScalar2RegMisc              \
+      {"scvtf_asisdmisc_r"_h, &VISITORCLASS::VisitNEONScalar2RegMisc},         \
+      {"ucvtf_asisdmisc_r"_h, &VISITORCLASS::VisitNEONScalar2RegMisc},         \
+      {"fmla_asisdelem_rh_h"_h,                                                \
+       &VISITORCLASS::VisitNEONScalarByIndexedElement},                        \
+      {"fmla_asisdelem_r_sd"_h,                                                \
+       &VISITORCLASS::VisitNEONScalarByIndexedElement},                        \
+      {"fmls_asisdelem_rh_h"_h,                                                \
+       &VISITORCLASS::VisitNEONScalarByIndexedElement},                        \
+      {"fmls_asisdelem_r_sd"_h,                                                \
+       &VISITORCLASS::VisitNEONScalarByIndexedElement},                        \
+      {"fmulx_asisdelem_rh_h"_h,                                               \
+       &VISITORCLASS::VisitNEONScalarByIndexedElement},                        \
+      {"fmulx_asisdelem_r_sd"_h,                                               \
+       &VISITORCLASS::VisitNEONScalarByIndexedElement},                        \
+      {"fmul_asisdelem_rh_h"_h,                                                \
+       &VISITORCLASS::VisitNEONScalarByIndexedElement},                        \
+  {                                                                            \
+    "fmul_asisdelem_r_sd"_h, &VISITORCLASS::VisitNEONScalarByIndexedElement    \
   }
